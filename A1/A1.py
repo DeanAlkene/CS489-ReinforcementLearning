@@ -88,7 +88,13 @@ class GridWorld:
         # for i in self.terminalState:
         #     self.value[i] = 0.0
         # print(self.value)
-        self.optimalPolicy = [random.randint(0, 3) for i in range(self.state)]
+        # self.optimalPolicy = [random.randint(0, 3) for i in range(self.state)]
+        #self.optimalPolicy = [sorted(random.sample([0, 1, 2, 3], k=random.randint(1, 4))) for i in range(self.state)]
+        self.optimalPolicy = [[0, 1, 2, 3] for i in range(self.state)]
+        self.policy = [[0.0 for j in range(len(self.action))] for i in range(self.state)]
+        for curState in range(self.state):
+            for a in self.optimalPolicy[curState]:
+                self.policy[curState][a] = 1.0 / len(self.optimalPolicy[curState])
         #print(self.optimalPolicy)
 
         numPass = 0
@@ -98,38 +104,49 @@ class GridWorld:
             #print("k = 0")
             self.printGridValue()
             #Loop
-            #while True:
-            #delta = 0.0
-            for curState in range(self.state):
-                oldValue = self.value[curState]
-                #using determinstic policy
-                nextState = self.trans[curState][self.optimalPolicy[curState]] #Only one element because here's GridWorld
-                tmp = self.prob[curState][self.optimalPolicy[curState]][nextState] * self.value[nextState] #prob must be 1.0
-                newValue = self.reward[curState][self.optimalPolicy[curState]] + (self.gamma * tmp) 
-                self.value[curState] = newValue
-                #delta = max(delta, math.fabs(oldValue - self.value[curState]))
-            #k += 1
-            #print("k = %d"%(k))
-            #print("delta = %0.6f"%(delta))
-            self.printGridValue()
-            #if delta < self.threshold or k > 100:
-            #    break
-            #print(k)
+            while True:
+                delta = 0.0
+                for curState in range(self.state):
+                    oldValue = self.value[curState]
+                    newValue = 0.0
+                    for a in self.action.keys(): #GridWorld Specified
+                        tmp = 0.0
+                        #the inner sum degraded
+                        nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
+                        tmp += self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
+                        newValue += self.policy[curState][self.action[a]] * (self.reward[curState][self.action[a]] + (self.gamma * tmp)) 
+                    # nextState = self.trans[curState][self.optimalPolicy[curState]] #Only one element because here's GridWorld
+                    # tmp = self.prob[curState][self.optimalPolicy[curState]][nextState] * self.value[nextState] #prob must be 1.0
+                    # newValue = self.reward[curState][self.optimalPolicy[curState]] + (self.gamma * tmp) 
+                    self.value[curState] = newValue
+                    delta = max(delta, math.fabs(oldValue - self.value[curState]))
+                k += 1
+                print("k = %d"%(k))
+                print("delta = %0.6f"%(delta))
+                self.printGridValue()
+                if delta < self.threshold:
+                   break
+            print(k)
 
             #Policy Improvement
             policyStable = True
             for curState in range(self.state):
                 oldAction = self.optimalPolicy[curState]
-                newAction = 0
+                newAction = []
                 maxValue = -1.0e9
                 for a in self.action.keys():
                     nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
                     tmp = self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
                     tmpValue = self.reward[curState][self.action[a]] + (self.gamma * tmp)
-                    if tmpValue > maxValue:
-                        newAction = self.action[a]
+                    if tmpValue > maxValue or math.fabs(tmpValue - maxValue) < 1e-9:
+                        newAction.append(self.action[a])
                         maxValue = tmpValue
-                self.optimalPolicy[curState] = newAction
+                self.optimalPolicy[curState] = sorted(newAction)
+                for a in self.action.keys():
+                    if self.action[a] in newAction:
+                        self.policy[curState][self.action[a]] = 1.0 / len(newAction)
+                    else:
+                        self.policy[curState][self.action[a]] = 0.0
                 if oldAction != self.optimalPolicy[curState]:
                     policyStable = False
             self.printOptimalPolicy()
@@ -148,11 +165,13 @@ class GridWorld:
             print()
 
     def printOptimalPolicy(self):
-        reverseTable = {0 : 'n', 1 : 'e', 2 : 's', 3 : 'w'}
+        reverseTable = {(0,) : 'n', (1,) : 'e', (2,) : 's', (3,) : 'w', 
+                        (0, 1) : 'ne', (0, 2) : 'ns', (0, 3) : 'nw', (1, 2) : 'es', (1, 3) : 'ew', (2, 3) : 'sw',
+                        (0, 1, 2) : 'nes', (0, 1, 3) : 'new', (0, 2, 3) : 'nsw', (1, 2, 3) : 'esw', (0, 1, 2, 3) : 'nesw'}
         for i in range(self.gridSize):
             for j in range(self.gridSize):
                 curState = j + i * self.gridSize
-                action = reverseTable[self.optimalPolicy[curState]]
+                action = reverseTable[tuple(sorted(self.optimalPolicy[curState]))]
                 print("%s\t"%(action), end='')
             print()
 
