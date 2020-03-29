@@ -66,7 +66,7 @@ class GridWorld:
                 newValue = 0.0
                 for a in self.action.keys(): #GridWorld Specified
                     tmp = 0.0
-                    #the inner sum degraded
+                    #the inner sum disappeared
                     nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
                     tmp += self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
                     newValue += self.policy[curState][self.action[a]] * (self.reward[curState][self.action[a]] + (self.gamma * tmp)) 
@@ -99,7 +99,7 @@ class GridWorld:
                     newValue = 0.0
                     for a in self.action.keys(): #GridWorld Specified
                         tmp = 0.0
-                        #the inner sum degraded
+                        #the inner sum disappeared
                         nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
                         tmp += self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
                         newValue += self.policy[curState][self.action[a]] * (self.reward[curState][self.action[a]] + (self.gamma * tmp)) 
