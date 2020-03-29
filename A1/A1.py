@@ -1,5 +1,4 @@
 import math
-import copy
 import random
 
 class GridWorld:
@@ -191,6 +190,17 @@ class GridWorld:
                     newAction.append(i)
             self.optimalPolicy[curState] = sorted(newAction)
 
+    def printInfo(self):
+        print("Gridworld with %d states:"%(self.state))
+        for i in range(self.gridSize):
+            for j in range(self.gridSize):
+                print("%d\t"%(self.map[i][j]), end='')
+            print()
+        print("Terminal States: ", end='')
+        for ts in self.terminalState:
+            print("%d "%(ts), end='')
+        print("\n")
+
     def printGridValue(self):
         for i in range(self.gridSize):
             for j in range(self.gridSize):
@@ -222,6 +232,7 @@ class GridWorld:
 
 def main():
     gridWorld = GridWorld(state=36, terminalState=[1, 35], gamma=1.0, threshold=0.00001)
+    gridWorld.printInfo()
     print("Iterative Policy Evaluation:")
     gridWorld.evaluation()
     gridWorld.printGridValue()
