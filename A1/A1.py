@@ -16,7 +16,7 @@ class GridWorld:
         self.trans = [[0 for j in range(len(self.action))] for i in range(self.state)] #s' = trans[s][a] 
         self.prob = [[[0.0 for k in range(self.state)] for j in range(len(self.action))] for i in range(self.state)] #P[s][a][s']
         self.reward = [[-1.0 for j in range(len(self.action))] for i in range(self.state)] #E[R[s][a]]
-        self.map = [[(j + i * self.gridSize) for j in range(self.gridSize)] for i in range(self.gridSize)]
+        self.map = [[(j + i * self.gridSize) for j in range(self.gridSize)] for i in range(self.gridSize)] #for calculating trans[s][a] and filling in P[s][a][s']
         self.__calcParam()
 
     def __calcParam(self):
