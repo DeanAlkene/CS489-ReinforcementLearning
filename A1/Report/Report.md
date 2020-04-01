@@ -1,8 +1,15 @@
-# Report of CS489 Project 1
+# CS489 Assignment 1 Report
+
+517030910214 Hongzhou Liu
 
 ## 0. Introduction
 
-In this project, we are required to build the GridWorld environment and implement iterative policy evaluation method and policy iteration method. These are two methods based on Dynamic Programming.
+In this assignment, we are required to build the GridWorld environment and implement iterative policy evaluation method and policy iteration method. These are two methods based on Dynamic Programming. 
+
+Environment:
+
+- Ubuntu 18.04 LTS
+- Python 3.7.4
 
 ## 1. GridWorld Environment
 
@@ -101,7 +108,7 @@ def evaluation(self):
                 break
 ```
 
-As we can see, in the inner for-loop we are calculating $\mathcal{R}_s^a+\gamma\sum_{s'\in\mathcal{S}}\mathcal{P}_{ss'}^{a}v_k(s')$. However, due to the property of GridWorld, the sum over $s'\in\mathcal{S}$ has only one term. Thus, no another for-loop is needed.
+As we can see, in the inner for-loop we are calculating $\mathcal{R}_s^a+\gamma\sum_{s'\in\mathcal{S}}\mathcal{P}_{ss'}^{a}v_k(s')$. However, due to the property of GridWorld, the sum over $s'\in\mathcal{S}$ has only one term. Thus, no other for-loop is needed.
 
 ### 2.2 Result
 
@@ -122,9 +129,9 @@ The algorithm on our GridWorld converges in about 300 iterations. And here's the
 
 ### 3.1 Implementation
 
-The policy iteration based on Bellman optimality equation is used to improve a given policy. I tried the algorithm shown in the slide. However, the program fell into a infinite loop. I found it will never converge if I arbitrarily initialize the policy as a deterministic policy. It's because the initialization may generate a deterministic policy which never reaches the terminal states. I figured out two methods to tackle with this problem.
+The policy iteration based on Bellman optimality equation is used to improve a given policy. I tried the algorithm shown in the slide. However, the program get stuck in a infinite loop. I found it will never converge if I arbitrarily initialize the policy as a deterministic policy. It's because the initialization may generate a deterministic policy which never reaches the terminal states. I figured out two methods to tackle with this problem.
 
-1. Remove the outer while-loop, which means evaluate only once
+1. Remove the outer while-loop, which means evaluate the policy only once
 2. Use nondeterministic policy
 
 According to  method 1, I rewrote the evaluation parts and it worked. It returned a optimal deterministic policy. However, I found there are some states which have more than one paths to the terminal states. It reminded me of method 2 and I modified the given algorithm. 
@@ -209,11 +216,11 @@ We can easily verify the correctness of the algorithm.
 
 ### 4.1 Implementation
 
-Thought not required, I implemented value iteration method to improve the policy. Value iteration is a method which update policy every iteration instead  of update policy after evaluation. The algorithm takes the advantage of the Bellman optimality equation directly.
+Thought not required, I implemented value iteration method to improve the policy. Value iteration is a method which updates policy every iteration instead  of updating policy after evaluation. The algorithm takes advantage of the Bellman optimality equation directly.
 $$
 v_{k+1}(s)= \max_{a\in\mathcal{A}}(\mathcal{R}_s^a+\gamma\sum_{s'\in\mathcal{S}}\mathcal{P}_{ss'}^{a}v_k(s'))
 $$
-And the implementation
+The implementation:
 
 ```python
 def valueIteration(self):
@@ -266,7 +273,7 @@ We can get the result in only 7 iterations. The result is the same as it is in P
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
-    src="pic/5.png">
+    src="pic/5-1.png">
     <br>
     <div style="color:orange; border-bottom: 1px solid #d9d9d9;
     display: inline-block;
@@ -274,4 +281,7 @@ We can get the result in only 7 iterations. The result is the same as it is in P
     padding: 2px;">Fig.5 Value Iteration</div>
 </center>
 
-## 5. Summarize and Acknowledgement
+
+## 5. Summary
+
+In this assignment, I implemented iterative policy evaluation, policy iteration and value iteration. After finishing this assignment, I have a better understanding of basic elements in reinforcement learning, such as policy, value function, Bellman equation and Markov Decision Process.
