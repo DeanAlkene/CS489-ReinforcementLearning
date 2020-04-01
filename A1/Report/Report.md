@@ -71,7 +71,7 @@ We can calculate $\mathcal{P}$ by invoking `self.__calcParam` and fill the proba
 
 ### 2.1 Implementation
 
-The policy evaluation is easy to implement using the data structures we declared before. We need to iteratively calculate the Bellman Equation until converge. Thus, we can use the following equation to update our state value function $v(s)$
+The policy evaluation is easy to implement using the data structures we declared before. We need to iteratively calculate the Bellman equation until converge. Thus, we can use the following equation to update our state value function $v(s)$
 $$
 v_{k+1}(s)= \sum_{a\in \mathcal{A}}\pi(a|s)(\mathcal{R}_s^a+\gamma\sum_{s'\in\mathcal{S}}\mathcal{P}_{ss'}^{a}v_k(s'))
 $$
@@ -171,7 +171,7 @@ def policyIteration(self):
             numPass += 1
 ```
 
-In the initialization phase, we initialize the policy as the random uniform policy as before. Otherwise, we will still get stuck. Accordingly, we need to set each states in`self.optimalPolicy` as north, east, south and west. The evaluation phase remains the same as iterative policy iteration.
+In the initialization phase, we initialize the policy as the random uniform policy as before. Otherwise, we will still get stuck. Accordingly, we need to set each states in `self.optimalPolicy` as north, east, south and west. The evaluation phase remains the same as iterative policy iteration.
 
 In the improvement phase, we find the action that maximize the state value and update the random uniform policy until the policy get stable.
 
@@ -190,12 +190,12 @@ The algorithm converges faster than I estimated. The result is shown as:
     padding: 2px;">Fig.3 Policy Iteration</div>
 </center>
 
-Respectively, the shortest distances from each state to terminal states is:
+Respectively, the shortest distances from each state to the terminal states is:
 
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
-    src="pic/4.png">
+    src="pic/4-1.png">
     <br>
     <div style="color:orange; border-bottom: 1px solid #d9d9d9;
     display: inline-block;
@@ -209,6 +209,69 @@ We can easily verify the correctness of the algorithm.
 
 ### 4.1 Implementation
 
+Thought not required, I implemented value iteration method to improve the policy. Value iteration is a method which update policy every iteration instead  of update policy after evaluation. The algorithm takes the advantage of the Bellman optimality equation directly.
+$$
+v_{k+1}(s)= \max_{a\in\mathcal{A}}(\mathcal{R}_s^a+\gamma\sum_{s'\in\mathcal{S}}\mathcal{P}_{ss'}^{a}v_k(s'))
+$$
+And the implementation
+
+```python
+def valueIteration(self):
+        #Initialize
+        ......
+        k = 0
+        #Loop
+        while True:
+            delta = 0
+            for curState in range(self.state):
+                oldValue = self.value[curState]
+                maxValue = -1.0e9
+                for a in self.action.keys():
+                    nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
+                    tmp = self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
+                    tmp = self.reward[curState][self.action[a]] + (self.gamma * tmp)
+                    if tmp > maxValue:
+                        maxValue = tmp
+                self.value[curState] = maxValue
+                delta = max(delta, math.fabs(oldValue - self.value[curState]))
+
+            k += 1
+            if delta < self.threshold:
+                break
+
+        for curState in range(self.state):
+            newAction = []
+            tmpValue = []
+            maxValue = -1.0e9
+            for a in self.action.keys():
+                nextState = self.trans[curState][self.action[a]] #Only one element because here's GridWorld
+                tmp = self.prob[curState][self.action[a]][nextState] * self.value[nextState] #prob must be 1.0
+                tmp = self.reward[curState][self.action[a]] + (self.gamma * tmp)
+                tmpValue.append(tmp)
+                if tmp > maxValue:
+                    maxValue = tmp
+
+            for i in range(len(tmpValue)):
+                if math.fabs(maxValue - tmpValue[i]) < 1e-9:
+                    newAction.append(i)
+            self.optimalPolicy[curState] = sorted(newAction)
+```
+
+The initialization phase is the same as policy iteration. In the while-loop, we update value function using Bellman optimality equation instead of Bellman equation. After that, we need to re-calculate the value function for each state and find the optimal policy.
+
 ### 4.2 Result
+
+We can get the result in only 7 iterations. The result is the same as it is in Policy Iteration section.
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/5.png">
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.5 Value Iteration</div>
+</center>
 
 ## 5. Summarize and Acknowledgement
