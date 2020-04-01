@@ -222,6 +222,20 @@ class GridWorld:
                 print("%-4s\t"%(action), end='')
             print()
 
+    def printDistance(self):
+        dist = [0 for i in range(self.state)]
+        for i in range(self.state):
+            curState = i
+            while curState not in self.terminalState:
+                curState = self.trans[curState][self.optimalPolicy[curState][0]]
+                dist[i] += 1
+        for i in range(self.gridSize):
+            for j in range(self.gridSize):
+                curState = j + i * self.gridSize
+                print("%d\t"%(dist[curState]), end='')
+            print()
+        
+
     def validationTest(self):
         for i in range(self.state):
             for a in self.action.keys():
@@ -242,6 +256,8 @@ def main():
     print("\nValue Iteration:")
     gridWorld.valueIteration()
     gridWorld.printOptimalPolicy()
+    print("\nShortest Distance:")
+    gridWorld.printDistance()
     
 if __name__ == '__main__':
     main()

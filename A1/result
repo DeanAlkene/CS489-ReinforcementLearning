@@ -30,3 +30,11 @@ ne  	n   	nw  	nw  	es  	s
 ne  	n   	nw  	es  	es  	s   	
 ne  	n   	es  	es  	es  	s   	
 e   	e   	e   	e   	e   	null	
+
+Shortest Distance:
+1	0	1	2	3	4	
+2	1	2	3	4	4	
+3	2	3	4	4	3	
+4	3	4	4	3	2	
+5	4	4	3	2	1	
+5	4	3	2	1	0	
