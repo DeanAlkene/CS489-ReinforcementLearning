@@ -8,9 +8,9 @@ class GridWorld:
         self.gamma = gamma #gamma
 
         self.value = []
-        self.policy = [] #pi[s][a]
         self.gridSize = int(math.sqrt(self.state))
         self.action = {'n' : 0, 'e' : 1, 's' : 2, 'w' : 3} #A
+        self.policy = [[0.25 for j in range(len(self.action))] for i in range(state)] #pi[s][a]
         self.trans = [[0 for j in range(len(self.action))] for i in range(self.state)] #s' = trans[s][a] 
         self.prob = [[[0.0 for k in range(self.state)] for j in range(len(self.action))] for i in range(self.state)] #P[s][a][s']
         self.reward = [[-1.0 for j in range(len(self.action))] for i in range(self.state)] #E[R[s][a]]
@@ -45,9 +45,68 @@ class GridWorld:
                     self.prob[i][self.action[a]][self.trans[i][self.action[a]]] = 1.0
                 else:
                     self.reward[i][self.action[a]] = 0.0
+        
+    def __episodeGenerator(self):
+        episode = []
+        episode.append(random.randint(0, 35))
+        curState = episode[0]
+        while curState not in self.terminalState:
+            curAction = random.random()
+            if curAction < 0.25:
+                curAction = 0
+            elif curAction >= 0.25 and curAction < 0.5:
+                curAction = 1
+            elif curAction >= 0.5 and curAction < 0.75:
+                curAction = 2
+            elif curAction >= 0.75:
+                curAction = 3
+            curReward = self.reward[curState][curAction]
+            curState = self.trans[curState][curAction]
+            episode.extend([curAction, curReward, curState])
+        return episode
 
-    def MC(self):
-        pass
+    def firstVisitMC(self, iterTime):
+        #Initialize
+        self.value = [0.0 for i in range(self.state)]
+        counter = [0 for i in range(self.state)]
+        returns = [0.0 for i in range(self.state)]
+        visited = [False for i in range(self.state)]
+
+        #Sample & Evaluate
+        for i in range(iterTime):
+            episode = self.__episodeGenerator()
+            for j in range(0, len(episode), 3):
+                curState = episode[j]
+                if not visited[curState]:
+                    visited[curState] = True
+                    counter[curState] += 1
+                    tmp = 0.0
+                    decay = 1.0
+                    for k in range(j + 2, len(episode), 3):
+                        tmp += decay * episode[k]
+                        decay *= self.gamma
+                    returns[curState] += tmp
+                    self.value[curState] = returns[curState] / counter[curState]
+
+    def everyVisitMC(self, iterTime):
+        #Initialize
+        self.value = [0.0 for i in range(self.state)]
+        counter = [0 for i in range(self.state)]
+        returns = [0.0 for i in range(self.state)]
+
+        #Sample & Evaluate
+        for i in range(iterTime):
+            episode = self.__episodeGenerator()
+            for j in range(0, len(episode), 3):
+                curState = episode[j]
+                counter[curState] += 1
+                tmp = 0.0
+                decay = 1.0
+                for k in range(j + 2, len(episode), 3):
+                    tmp += decay * episode[k]
+                    decay *= self.gamma
+                returns[curState] += tmp
+                self.value[curState] = returns[curState] / counter[curState]
 
     def TD0(self):
         pass
@@ -70,23 +129,18 @@ class GridWorld:
                 print("%0.2f\t"%(self.value[curState]), end='')
             print()
 
-    def validationTest(self):
-        for i in range(self.state):
-            for a in self.action.keys():
-                for j in range(self.state):
-                    if not math.fabs(self.prob[i][self.action[a]][j]) <= 1e-6:
-                        print("state %d in action %s to state %d has prob %f"%(i, a, j, self.prob[i][self.action[a]][j]))
-            print()
-
 def main():
     gridWorld = GridWorld(state=36, terminalState=[1, 35], gamma=1.0)
     gridWorld.printInfo()
-    print("\nMC:")
-    gridWorld.MC()
+    print("\nFirst Visit MC:")
+    gridWorld.firstVisitMC(iterTime=10000)
     gridWorld.printGridValue()
-    print("\nTD(0):")
-    gridWorld.TD0()
+    print("\nEvery Visit MC:")
+    gridWorld.everyVisitMC(iterTime=1000)
     gridWorld.printGridValue()
+    # print("\nTD(0):")
+    # gridWorld.TD0()
+    # gridWorld.printGridValue()
     
 if __name__ == '__main__':
     main()
