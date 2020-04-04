@@ -12,7 +12,6 @@ class GridWorld:
         self.action = {'n' : 0, 'e' : 1, 's' : 2, 'w' : 3} #A
         self.policy = [[0.25 for j in range(len(self.action))] for i in range(state)] #pi[s][a]
         self.trans = [[0 for j in range(len(self.action))] for i in range(self.state)] #s' = trans[s][a] 
-        self.prob = [[[0.0 for k in range(self.state)] for j in range(len(self.action))] for i in range(self.state)] #P[s][a][s']
         self.reward = [[-1.0 for j in range(len(self.action))] for i in range(self.state)] #E[R[s][a]]
         self.map = [[(j + i * self.gridSize) for j in range(self.gridSize)] for i in range(self.gridSize)] #for calculating trans[s][a] and filling in P[s][a][s']
         self.__calcParam()
@@ -39,27 +38,25 @@ class GridWorld:
                     self.trans[curState][self.action['e']] = self.map[i][j+1]
                 curState += 1
         
-        for i in range(self.state):
+        for i in self.terminalState:
             for a in self.action.keys():
-                if i not in self.terminalState:
-                    self.prob[i][self.action[a]][self.trans[i][self.action[a]]] = 1.0
-                else:
-                    self.reward[i][self.action[a]] = 0.0
+                self.reward[i][self.action[a]] = 0.0
         
     def __episodeGenerator(self):
         episode = []
         episode.append(random.randint(0, 35))
         curState = episode[0]
         while curState not in self.terminalState:
-            curAction = random.random()
-            if curAction < 0.25:
-                curAction = 0
-            elif curAction >= 0.25 and curAction < 0.5:
-                curAction = 1
-            elif curAction >= 0.5 and curAction < 0.75:
-                curAction = 2
-            elif curAction >= 0.75:
-                curAction = 3
+            curAction = random.randint(0, 3)
+            # curAction = random.random()
+            # if curAction < 0.25:
+            #     curAction = 0
+            # elif curAction >= 0.25 and curAction < 0.5:
+            #     curAction = 1
+            # elif curAction >= 0.5 and curAction < 0.75:
+            #     curAction = 2
+            # elif curAction >= 0.75:
+            #     curAction = 3
             curReward = self.reward[curState][curAction]
             curState = self.trans[curState][curAction]
             episode.extend([curAction, curReward, curState])
