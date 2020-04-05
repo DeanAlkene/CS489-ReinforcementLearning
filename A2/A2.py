@@ -155,10 +155,10 @@ def main():
     gridWorld.firstVisitMC(iterTime=10000)
     gridWorld.printGridValue()
     print("\nEvery Visit MC:")
-    gridWorld.everyVisitMC(iterTime=1000)
+    gridWorld.everyVisitMC(iterTime=5000)
     gridWorld.printGridValue()
     print("\nTD(0), alpha=0.5:")
-    gridWorld.TD0(iterTime=10000, alpha=0.5)
+    gridWorld.TD0(iterTime=100000, alpha=0.3)
     gridWorld.printGridValue()
     
 if __name__ == '__main__':
