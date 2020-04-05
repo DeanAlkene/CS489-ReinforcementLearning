@@ -48,15 +48,6 @@ class GridWorld:
         curState = episode[0]
         while curState not in self.terminalState:
             curAction = random.randint(0, 3)
-            # curAction = random.random()
-            # if curAction < 0.25:
-            #     curAction = 0
-            # elif curAction >= 0.25 and curAction < 0.5:
-            #     curAction = 1
-            # elif curAction >= 0.5 and curAction < 0.75:
-            #     curAction = 2
-            # elif curAction >= 0.75:
-            #     curAction = 3
             curReward = self.reward[curState][curAction]
             curState = self.trans[curState][curAction]
             episode.extend([curAction, curReward, curState])
@@ -139,7 +130,6 @@ class GridWorld:
                 self.value[curState] = self.value[curState] + alpha * (curReward + self.gamma * self.value[nextState] - self.value[curState])
                 curState = nextState
 
-        
     def printInfo(self):
         print("Gridworld with %d states:"%(self.state))
         for i in range(self.gridSize):
