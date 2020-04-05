@@ -62,11 +62,15 @@ class GridWorld:
             episode.extend([curAction, curReward, curState])
         return episode
 
-    def firstVisitMC(self, iterTime):
+    def firstVisitMC(self, iterTime, alpha=1.0, useAlpha=False):
+        #Check
+        if useAlpha:
+            if alpha <= 0.0 or alpha > 1.0:
+                print("alpha should be in (0, 1]")
+        
         #Initialize
         self.value = [0.0 for i in range(self.state)]
         counter = [0 for i in range(self.state)]
-        returns = [0.0 for i in range(self.state)]
         visited = [False for i in range(self.state)]
 
         #Sample & Evaluate
@@ -77,19 +81,26 @@ class GridWorld:
                 if not visited[curState]:
                     visited[curState] = True
                     counter[curState] += 1
-                    tmp = 0.0
+                    G = 0.0
                     decay = 1.0
                     for k in range(j + 2, len(episode), 3):
-                        tmp += decay * episode[k]
+                        G += decay * episode[k]
                         decay *= self.gamma
-                    returns[curState] += tmp
-                    self.value[curState] = returns[curState] / counter[curState]
+                    if useAlpha:
+                        self.value[curState] = self.value[curState] + alpha * (G - self.value[curState])
+                    else:
+                        self.value[curState] = self.value[curState] + (G - self.value[curState]) / counter[curState]
+            visited = [False for i in range(self.state)]
 
-    def everyVisitMC(self, iterTime):
+    def everyVisitMC(self, iterTime, alpha=1.0, useAlpha=False):
+        #Check
+        if useAlpha:
+            if alpha <= 0.0 or alpha > 1.0:
+                print("alpha should be in (0, 1]")
+        
         #Initialize
         self.value = [0.0 for i in range(self.state)]
         counter = [0 for i in range(self.state)]
-        returns = [0.0 for i in range(self.state)]
 
         #Sample & Evaluate
         for i in range(iterTime):
@@ -97,17 +108,38 @@ class GridWorld:
             for j in range(0, len(episode), 3):
                 curState = episode[j]
                 counter[curState] += 1
-                tmp = 0.0
+                G = 0.0
                 decay = 1.0
                 for k in range(j + 2, len(episode), 3):
-                    tmp += decay * episode[k]
+                    G += decay * episode[k]
                     decay *= self.gamma
-                returns[curState] += tmp
-                self.value[curState] = returns[curState] / counter[curState]
+                if useAlpha:
+                    self.value[curState] = self.value[curState] + alpha * (G - self.value[curState])
+                else:
+                    self.value[curState] = self.value[curState] + (G - self.value[curState]) / counter[curState]
 
-    def TD0(self):
-        pass
+    def TD0(self, iterTime, alpha):
+        #Check
+        if alpha <= 0.0 or alpha > 1.0:
+            print("alpha should be in (0, 1]")
+            return
+        
+        #Initialize
+        self.value = [random.random() for i in range(self.state)]
+        for i in self.terminalState:
+            self.value[i] = 0.0
 
+        #Sample & Evaluate
+        for i in range(iterTime):
+            curState = random.randint(0, 35)
+            while curState not in self.terminalState:
+                curAction = random.randint(0, 3)
+                curReward = self.reward[curState][curAction]
+                nextState = self.trans[curState][curAction]
+                self.value[curState] = self.value[curState] + alpha * (curReward + self.gamma * self.value[nextState] - self.value[curState])
+                curState = nextState
+
+        
     def printInfo(self):
         print("Gridworld with %d states:"%(self.state))
         for i in range(self.gridSize):
@@ -135,9 +167,9 @@ def main():
     print("\nEvery Visit MC:")
     gridWorld.everyVisitMC(iterTime=1000)
     gridWorld.printGridValue()
-    # print("\nTD(0):")
-    # gridWorld.TD0()
-    # gridWorld.printGridValue()
+    print("\nTD(0), alpha=0.5:")
+    gridWorld.TD0(iterTime=10000, alpha=0.5)
+    gridWorld.printGridValue()
     
 if __name__ == '__main__':
     main()
