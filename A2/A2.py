@@ -152,14 +152,16 @@ def main():
     gridWorld = GridWorld(state=36, terminalState=[1, 35], gamma=1.0)
     gridWorld.printInfo()
     print("\nFirst Visit MC:")
-    gridWorld.firstVisitMC(iterTime=10000)
+    gridWorld.firstVisitMC(iterTime=10000000)
     gridWorld.printGridValue()
     print("\nEvery Visit MC:")
-    gridWorld.everyVisitMC(iterTime=5000)
+    gridWorld.everyVisitMC(iterTime=10000000)
     gridWorld.printGridValue()
-    print("\nTD(0), alpha=0.5:")
-    gridWorld.TD0(iterTime=100000, alpha=0.3)
-    gridWorld.printGridValue()
+    alphaList = [0.1 * i for i in range(1, 10)]
+    for a in alphaList:
+        print("\nTD(0), alpha=%0.2f:"%(a))
+        gridWorld.TD0(iterTime=10000000, alpha=a)
+        gridWorld.printGridValue()
     
 if __name__ == '__main__':
     main()
