@@ -11,11 +11,84 @@ Environment:
 - Ubuntu 18.04 LTS
 - Python 3.7.4
 
+We've already calculated true value of the given policy in last assignment. We consider it as a baseline.
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/1.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/True Value.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.1 Baseline</div>
+</center>
+
+
 ## 1. Monte-Carlo Learning
 
 ### 1.1 Implementation
 
 #### 1.1.1 First  Visit MC
+
+MC can learn directly from episodes of experience. The idea behind it is quite simple, which regards average sample returns as value. According to law of large numbers, if we sample infinite episodes, the sample average returns is the true value.
+
+In MC algorithm, we should first generate an episode under policy $\pi$. The policy here is still the random uniform policy. The code to generate an episode is shown as follows:
+
+```python
+def __episodeGenerator(self):
+        episode = []
+        episode.append(random.randint(0, 35))
+        curState = episode[0]
+        while curState not in self.terminalState:
+            curAction = random.randint(0, 3)
+            curReward = self.reward[curState][curAction]
+            curState = self.trans[curState][curAction]
+            episode.extend([curAction, curReward, curState])
+        return episode
+```
+
+It's easy to implement as we've perfectly defined all the data structure needed.
+
+In first visit MC, for a given episode and a state $s$ in the episode, we find the first time-step $t$ that it is visited in the episode. Then, we increment the counter $N(s)$ and update estimate value $V(s)$ incrementally by 
+$$
+V(s)\leftarrow V(s) + \dfrac{1}{N(s)}(G_t-V(s))
+$$
+where $G_t=R_{t+1}+\gamma R_{t+2} + \cdots + \gamma^{T-t-1}R_T$.
+
+Notice that MC can only apply to episodic MDPs ($\gamma=1$). To solve the "first visit" problem, we use `visited`, a boolean array, to track if a state is visited in an episode. The code:
+
+```python
+def firstVisitMC(self, iterTime, alpha=1.0, useAlpha=False):
+        #Initialize
+        self.value = [0.0 for i in range(self.state)]
+        counter = [0 for i in range(self.state)]
+        visited = [False for i in range(self.state)]
+
+        #Sample & Evaluate
+        for i in range(iterTime):
+            episode = self.__episodeGenerator()
+            for j in range(0, len(episode), 3):
+                curState = episode[j]
+                if not visited[curState]:
+                    visited[curState] = True
+                    counter[curState] += 1
+                    G = 0.0
+                    decay = 1.0
+                    for k in range(j + 2, len(episode), 3):
+                        G += decay * episode[k]
+                        decay *= self.gamma
+                    if useAlpha:
+                        self.value[curState] = self.value[curState] + alpha * (G - self.value[curState])
+                    else:
+                        self.value[curState] = self.value[curState] + (G - self.value[curState]) / counter[curState]
+            visited = [False for i in range(self.state)]
+```
 
 #### 1.1.2 Every Visit MC
 
