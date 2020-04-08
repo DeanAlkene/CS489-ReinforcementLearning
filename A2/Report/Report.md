@@ -28,8 +28,6 @@ We've already calculated true value of the given policy in last assignment. We c
     color: #999;
     padding: 2px;">Fig.1 Baseline</div>
 </center>
-
-
 ## 1. Monte-Carlo Learning
 
 ### 1.1 Implementation
@@ -90,9 +88,64 @@ def firstVisitMC(self, iterTime, alpha=1.0, useAlpha=False):
             visited = [False for i in range(self.state)]
 ```
 
+As shown in the code, we use outer i-loop for different episode samples, middle j-loop for going through every states in the episode and inner k-loop for calculating return of a given first-visit state.
+
 #### 1.1.2 Every Visit MC
 
+The every visit MC algorithm can be implemented by deleting `visited` array and the if-statement in first visit MC. So the middle j-loop is now:
+
+```python
+        for j in range(0, len(episode), 3):
+                curState = episode[j]
+                counter[curState] += 1
+                G = 0.0
+                decay = 1.0
+                for k in range(j + 2, len(episode), 3):
+                    G += decay * episode[k]
+                    decay *= self.gamma
+                if useAlpha:
+                    self.value[curState] = self.value[curState] + alpha * (G - self.value[curState])
+                else:
+                    self.value[curState] = self.value[curState] + (G - self.value[curState]) / counter[curState]
+```
+
 ### 1.2 Result
+
+We set `iterTime` for both MC algorithms as 10000000. And finally we got
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/2.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/First Visit MC.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.2 First Visit MC</div>
+</center>
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/3.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/Every Visit MC.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.3 Every Visit MC</div>
+</center>
+
+As we can see, the results of both MC after quantities of iterations are almost the true value. Thus, we can use MC to estimate a policy, despite that it is time consuming.
 
 ## 2. Temporal-Difference Learning
 
