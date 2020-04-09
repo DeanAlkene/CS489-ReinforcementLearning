@@ -129,6 +129,8 @@ We set `iterTime` for both MC algorithms as 10000000. And finally we got
     padding: 2px;">Fig.2 First Visit MC</div>
 </center>
 
+
+
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
@@ -151,6 +153,110 @@ As we can see, the results of both MC after quantities of iterations are almost 
 
 ### 2.1 Implementation
 
+TD can also learn directly from episodes of experience. However, unlike MC, TD learns from incomplete episodes and updates a guess towards a guess. It learns $v_{\pi}$ on-line from experience under policy $\pi$.
+
+The simplest TD learning algorithm is TD(0). In every episodes, TD(0) randomly chooses a starting state $S$. Then, it samples an action under policy $\pi$, takes the action and observes next state $S'$ and reward $R$. After that, it will update $V(S)$ by
+$$
+V(S)\leftarrow V(S)+\alpha(R+\gamma V(S')-V(S))
+$$
+The episode will be ended if some action leads TD(0) to a terminal state.
+
+According to these ideas, we can implement TD(0) in Python:
+
+```python
+def TD0(self, iterTime, alpha):
+        #Initialize
+        self.value = [random.random() for i in range(self.state)]
+        for i in self.terminalState:
+            self.value[i] = 0.0
+
+        #Sample & Evaluate
+        for i in range(iterTime):
+            curState = random.randint(0, 35)
+            while curState not in self.terminalState:
+                curAction = random.randint(0, 3)
+                curReward = self.reward[curState][curAction]
+                nextState = self.trans[curState][curAction]
+                self.value[curState] = self.value[curState] + alpha * (curReward + self.gamma * self.value[nextState] - self.value[curState])
+                curState = nextState
+```
+
 ### 2.2 Result
 
+We can run TD(0) with different $\alpha$'s. And for each $\alpha$, we set `iterTime` as 10000000. Here's the results under different $\alpha$'s:
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/4.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/TD(0), alpha=0.20.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.4 TD(0), alpha=0.2</div>
+</center>
+
+
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/5.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/TD(0), alpha=0.40.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.5 TD(0), alpha=0.4</div>
+</center>
+
+
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/6.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/TD(0), alpha=0.60.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.6 TD(0), alpha=0.6</div>
+</center>
+
+
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="pic/7.png"
+    width=250>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../Plot/TD(0), alpha=0.80.jpg"
+    width=250>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.7 TD(0), alpha=0.8</div>
+</center>
+
+As we can see, the smaller the $\alpha$ is, the closer the result is to the real value. However, we can still use TD(0) to estimate a policy, because the "trend" of the value is the same as the "trend" of true value.
+
 ## 3. Summary
+
+In this assignment, I implemented MC and TD(0) and had a better understand of model-free algorithms.
