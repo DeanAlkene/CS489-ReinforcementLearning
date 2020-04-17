@@ -77,6 +77,12 @@ class CliffWalking:
     #         episode.extend([curAction, curReward, curState])
     #     return episode
 
+    def SARSA(self, epsilon):
+        pass
+
+    def Q_Learning(self, epsilon):
+        pass
+
     def printInfo(self):
         print("Cliff Walking with %d states:"%(self.state))
         for i in range(self.width):
