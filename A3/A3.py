@@ -176,12 +176,15 @@ class CliffWalking:
 def main():
     cliffWalking = CliffWalking(width=4, length=12, startState=36, goalState=47, gamma=1.0)
     cliffWalking.printInfo()
-    cliffWalking.SARSA(alpha=0.2, epsilon=0.5, iterTimes=10000)
-    print("SARSA:")
-    cliffWalking.printOptimalPolicy()
-    cliffWalking.Q_Learning(alpha=0.2, epsilon=0.1, iterTimes=10000)
-    print("Q-Learning:")
-    cliffWalking.printOptimalPolicy()
+    for e in [0.00001, 0.0001, 0.001, 0.1]:
+        cliffWalking.SARSA(alpha=0.2, epsilon=e, iterTimes=10000)
+        print("SARSA, alpha=0.2, epsilon=%f:"%(e))
+        cliffWalking.printOptimalPolicy()
+        print()
+        cliffWalking.Q_Learning(alpha=0.2, epsilon=e, iterTimes=10000)
+        print("Q-Learning, alpha=0.2, epsilon=%f:"%(e))
+        cliffWalking.printOptimalPolicy()
+        print()
     
 if __name__ == '__main__':
     main()
