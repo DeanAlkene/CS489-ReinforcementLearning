@@ -1,5 +1,6 @@
 import math
 import random
+import copy
 import numpy as np
 
 class CliffWalking:
@@ -107,15 +108,6 @@ class CliffWalking:
                 self.__updatePolicy(curState, epsilon)
                 curState = nextState
                 curAction = nextAction
-        
-        for s in range(self.state):
-            print("Q[%d]: " % (s), end='')
-            print(self.QValue[s], end='')
-            print(' %d' % (np.argmax(self.QValue[s])))
-        curState = self.startState
-        while curState != self.goalState:
-            print("%d\t"%(curState), end='')
-            curState = self.trans[curState][np.argmax(self.QValue[curState])]
 
     def Q_Learning(self, alpha, epsilon, iterTimes):
         #Initialize
@@ -137,14 +129,29 @@ class CliffWalking:
                 self.__updatePolicy(curState, epsilon)
                 curState = nextState
         
-        for s in range(self.state):
-            print("Q[%d]: " % (s), end='')
-            print(self.QValue[s], end='')
-            print(' %d' % (np.argmax(self.QValue[s])))
+    def printOptimalPolicy(self):
+        reverseTable = ['n', 'e', 's', 'w']
+        opt = []
         curState = self.startState
+        res = copy.deepcopy(self.map)
         while curState != self.goalState:
-            print("%d\t"%(curState), end='')
+            opt.append(curState)
+            opt.append(np.argmax(self.QValue[curState]))
             curState = self.trans[curState][np.argmax(self.QValue[curState])]
+        for i in range(self.width):
+            for j in range(self.length):
+                if str(res[i][j]) != '--':
+                    res[i][j] = 0
+                else:
+                    res[i][j] = '-'
+        for i in range(0, len(opt), 2):
+            curState = opt[i]
+            res[curState // self.length][curState % self.length] = reverseTable[opt[i + 1]]
+        res[self.width - 1][self.length - 1] = 'G'
+        for i in range(self.width):
+            for j in range(self.length):
+                print("%s\t"%(str(res[i][j])), end='')
+            print()
 
     def printInfo(self):
         print("Cliff Walking with %d states:"%(self.state))
@@ -155,12 +162,10 @@ class CliffWalking:
         print("Start State: %d"%(self.startState))
         print("Goal State: %d"%(self.goalState))
 
-    # def printGridValue(self):
-    #     for i in range(self.gridSize):
-    #         for j in range(self.gridSize):
-    #             curState = j + i * self.gridSize
-    #             print("%0.2f\t"%(self.value[curState]), end='')
-    #         print()
+    def printGridQValue(self):
+        for s in range(self.state):
+            print("Q[%d]: " % (s), end='')
+            print(self.QValue[s])
     
     def validationCheck(self):
         for s in range(self.state):
@@ -171,8 +176,12 @@ class CliffWalking:
 def main():
     cliffWalking = CliffWalking(width=4, length=12, startState=36, goalState=47, gamma=1.0)
     cliffWalking.printInfo()
-    cliffWalking.SARSA(alpha=0.2, epsilon=0.1, iterTimes=10000)
+    cliffWalking.SARSA(alpha=0.2, epsilon=0.5, iterTimes=10000)
+    print("SARSA:")
+    cliffWalking.printOptimalPolicy()
     cliffWalking.Q_Learning(alpha=0.2, epsilon=0.1, iterTimes=10000)
+    print("Q-Learning:")
+    cliffWalking.printOptimalPolicy()
     
 if __name__ == '__main__':
     main()
