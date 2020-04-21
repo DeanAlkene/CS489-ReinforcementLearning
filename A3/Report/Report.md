@@ -39,14 +39,20 @@ for cliffState in range(self.startState + 1, self.goalState):
 
 ### 1.1 Implementation
 
-We need to implement a method that calculates $\epsilon$-greedy policy and a method that generates an action from the policy.
+SARSA is a kind of on-policy TD learning algorithm. When doing policy improvement, we cannot consider all the states because TD is model free. Thus we have to use action value to evaluate policy. In SARSA, we need to modify TD learning. We should generate action from $\epsilon$-soft policy and update action value by
+$$
+Q(S,A)\leftarrow Q(S,A)+\alpha(R+\gamma Q(S',A')-Q(S,A))
+$$
+where $A$ is the chosen action, $S'$ and $R$ are the next state and reward when taking $A$ under $S$, $A'$ is another action chosen under $S'$.
 
-The $\epsilon$-greedy policy is defined as
+Firstly, we need to implement a method that calculates $\epsilon$-soft policy and a method that generates an action from the policy.
+
+The $\epsilon$-soft policy is defined as
 $$
 \pi(a|s)=\left\{
         \begin{array}{cl}
-          {1-\epsilon+\epsilon/|\mathcal{A}|} & {\text{if } a=\arg\max_{a}Q(s,a)} \\
-          {\epsilon/|\mathcal{A}|} & {\text{otherwise}} \\
+          {1-\epsilon+\epsilon/|\mathcal{A}(s)|} & {\text{if } a=\arg\max_{a}Q(s,a)} \\
+          {\epsilon/|\mathcal{A}(s)|} & {\text{otherwise}} \\
         \end{array}\right.
 $$
 Thus, we can implement it easily as:
@@ -61,7 +67,7 @@ Thus, we can implement it easily as:
                 self.policy[s][a] = 1 - epsilon + epsilon / len(self.action)
 ```
 
-In SARSA, we need to generate an action $A$ from $S$ using $\epsilon$-greedy policy derived from $Q$, which is totally different from generate an action from uniform random policy. In `__actionGenerator`, we divide $[0,1)$ into four intervals. The length of each interval corresponds to the policy value of state $s$ and action $a$. `accProb` is an array that stores the edge values of intervals. Then, we just need to throw a stone (`prob`) into the line $[0,1)$ and output the interval it falls into.
+In SARSA, we need to generate an action $A$ from $S$ using $\epsilon$-soft policy derived from $Q$, which is totally different from generate an action from uniform random policy. In `__actionGenerator`, we divide $[0,1)$ into four intervals. The length of each interval corresponds to the policy value of state $s$ and action $a$. `accProb` is an array that stores the edge values of intervals. Then, we just need to throw a stone (`prob`) into the line $[0,1)$ and output the interval it falls into.
 
 ```python
     def __actionGenerator(self, s, epsilon):
@@ -103,7 +109,7 @@ In the initialize part, we should initialize Q-value and generate a policy from 
 
 ### 1.2 Result
 
-We run SARSA with different $\epsilon$'s. The result differs when we feed it in with different $\epsilon$'s.
+We run SARSA with different $\epsilon$. The result differs when we feed it in with different $\epsilon$.
 
 <center>
     <img style="border-radius: 0.3125em;
@@ -152,10 +158,37 @@ We run SARSA with different $\epsilon$'s. The result differs when we feed it in 
     color: #999;
     padding: 2px;">Fig.5 SARSA, epsilon=0.1</div>
 </center>
+As we can see, when $\epsilon$ is large, the agent will choose a safe path, i.e. a farther path from the cliff, to approach the goal in spite of getting less reward. However, as $\epsilon$ decreases, the agent will choose a path which is more dangerous. It is because, when $\epsilon$ is small, the $\epsilon$-greedy policy improvement will limit the probability of observation of other states and force the agent to choose the optimal path. And when $\epsilon$ is large, the agent may choose those non-optimal paths.
 
 ## 2. Q-Learning
 
 ### 2.1 Implementation
+
+Base on `__updatePolicy` and `actionGenerator`, we can implement Q-Learning as
+
+```python
+    def Q_Learning(self, alpha, epsilon, iterTimes):
+        #Initialize
+        self.QValue = [[random.random() for j in range(len(self.action))] for i in range(self.state)]
+        self.policy = [[0.0 for j in range(len(self.action))] for i in range(self.state)]
+        for a in self.action.values():
+            self.QValue[self.goalState][a] = 0.0
+        for s in range(self.state):
+            self.__updatePolicy(s, epsilon)
+
+        #Iteration
+        for _ in range(iterTimes):
+            curState = self.startState
+            while curState != self.goalState:
+                curAction = self.__actionGenerator(curState, epsilon)
+                nextState = self.trans[curState][curAction]
+                curReward = self.reward[curState][curAction]
+                self.QValue[curState][curAction] = self.QValue[curState][curAction] + alpha * (curReward + self.gamma * max(self.QValue[nextState]) - self.QValue[curState][curAction])
+                self.__updatePolicy(curState, epsilon)
+                curState = nextState
+```
+
+The initialize part is the same as SARSA. In the iteration part, we choose action $\epsilon$-greedily using `__actionGenerator` and update Q value greedily just using `max`.
 
 ### 2.2 Result
 
