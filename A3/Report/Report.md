@@ -164,6 +164,14 @@ As we can see, when $\epsilon$ is large, the agent will choose a safe path, i.e.
 
 ### 2.1 Implementation
 
+Q-Learning is a kind of off-policy learning algorithm. There are a target policy we want to learn about and a behavior policy the agent follows in order to explore the environment. The term off-policy means the agent learn from data off the target policy.
+
+In Q-Learning, we will improve a target policy $\pi$ greedily and follow a behavior policy $\mu$, which is $\epsilon$-greedy. It means the agent will choose an action $A$ following the behavior policy. When it comes to update $Q(S,A)$ value, we do it greedily by
+$$
+Q(S,A)\leftarrow Q(S,A)+\alpha[R+\gamma\max_aQ(S',a)-Q(S,A)]
+$$
+where $S'$ is the state after $S$ taking action $A$. Actually, we choose $A^*$ greedily by $A^*=\arg\max_aQ(S',a)$, however, $Q(S,A^*)$ equals to $\max_aQ(S,a)$. Thus we directly use $\max$ when updating $Q(S,A)$.
+
 Base on `__updatePolicy` and `actionGenerator`, we can implement Q-Learning as
 
 ```python
@@ -192,6 +200,8 @@ The initialize part is the same as SARSA. In the iteration part, we choose actio
 
 ### 2.2 Result
 
+As we can see, no matter what value $\epsilon$ is, the Q-Learning will find the optimal way to approach the goal. The power of off-policy learning reveals.
+
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
@@ -203,7 +213,6 @@ The initialize part is the same as SARSA. In the iteration part, we choose actio
     color: #999;
     padding: 2px;">Fig.6 Q-Learning, epsilon=0.001</div>
 </center>
-
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
@@ -215,5 +224,3 @@ The initialize part is the same as SARSA. In the iteration part, we choose actio
     color: #999;
     padding: 2px;">Fig.7 Q-Learning, epsilon=0.1</div>
 </center>
-
-## 3. Summary
