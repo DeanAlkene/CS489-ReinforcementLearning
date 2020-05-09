@@ -8,10 +8,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 Exp = namedtuple('Exp', ('state', 'action', 'reward', 'nextState', 'done'))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Enviroment:
     def __init__(self, maxSteps):
@@ -84,8 +83,8 @@ class Agent:
         self.lr = lr
         self.hiddenSize = hiddenSize
         self.updateStride = updateStride
-        self.net = DQN(self.stateSize, self.hiddenSize, self.actionNum)
-        self.targetNet = DQN(self.stateSize, self.hiddenSize, self.actionNum)
+        self.net = DQN(self.stateSize, self.hiddenSize, self.actionNum).to(device)
+        self.targetNet = DQN(self.stateSize, self.hiddenSize, self.actionNum).to(device)
         self.optimizer = optim.Adam(params=self.net.parameters(), lr=self.lr)
 
     def getAction(self, state, ifEpsilonGreedy=True):
@@ -94,7 +93,7 @@ class Agent:
                 with torch.no_grad():
                     return self.net(state).max(1)[1].view(1, 1)
             else:
-                return torch.tensor([[random.randrange(self.actionNum)]], dtype=torch.long)
+                return torch.tensor([[random.randrange(self.actionNum)]], device=device, dtype=torch.long)
         else:
             with torch.no_grad():
                 return self.net(state).max(1)[1].view(1, 1)
@@ -120,7 +119,15 @@ class Agent:
         loss.backward()
         self.optimizer.step()
 
-    def DeepQLearning(self, env, buf, episodeNum):
+    def preExplore(self, env, buf, preExploreTime):
+        self.targetNet.load_state_dict(self.net.state_dict())
+        for i in range(preExploreTime):
+            self.optimzeDQN(buf)
+            if i % self.updateStride == 0:
+                self.targetNet.load_state_dict(self.net.state_dict())
+
+    def DeepQLearning(self, env, buf, episodeNum, preExploreTime):
+        # self.preExplore(env, buf, preExploreTime)
         totalN = 0
         scores = []
         steps = []
@@ -129,14 +136,14 @@ class Agent:
             score = 0.0
             state = env.reset()
             for t in count():
-                #env.render()
-                action = self.getAction(torch.tensor(state.reshape(1, self.stateSize), dtype=torch.float))
+                env.render()
+                action = self.getAction(torch.tensor(state.reshape(1, self.stateSize), device=device, dtype=torch.float))
                 nextState, reward, done, _ = env.step(action.item())
-                buf.push(torch.tensor(state.reshape(1, self.stateSize), dtype=torch.float),
+                buf.push(torch.tensor(state.reshape(1, self.stateSize), device=device, dtype=torch.float),
                           action,
-                          torch.tensor([[reward]], dtype=torch.float),
-                          torch.tensor(nextState.reshape(1, self.stateSize), dtype=torch.float),
-                          torch.tensor([[not done]], dtype=torch.long))
+                          torch.tensor([[reward]], device=device, dtype=torch.float),
+                          torch.tensor(nextState.reshape(1, self.stateSize), device=device, dtype=torch.float),
+                          torch.tensor([[not done]], device=device, dtype=torch.long))
                 state = nextState
                 score += reward
                 self.optimzeDQN(buf)
@@ -148,7 +155,11 @@ class Agent:
                     steps.append(t + 1)
                     print("Episode %d ended after %d timesteps with score %f" % (i + 1, t + 1, score))
                     break
-
+        
+        np.save('DQN_score', scores)
+        np.save('DQN_step', steps)
+        torch.save(self.net.state_dict(), 'net.pkl')
+        torch.save(self.targetNet.state_dict(), 'targetNet.pkl')
         ep_range = [i + 1 for i in range(episodeNum)]
         plt.figure()
         plt.plot(ep_range, scores)
@@ -191,11 +202,11 @@ class ReplayBuffer:
             for t in count():
                 action = env.getActionSpace().sample()
                 nextState, reward, done, _ = env.step(action)
-                self.push(torch.tensor(state.reshape(1, stateSize), dtype=torch.float),
-                          torch.tensor([[action]], dtype=torch.long),
-                          torch.tensor([[reward]], dtype=torch.float),
-                          torch.tensor(nextState.reshape(1, stateSize), dtype=torch.float),
-                          torch.tensor([[not done]], dtype=torch.long))
+                self.push(torch.tensor(state.reshape(1, stateSize), device=device, dtype=torch.float),
+                          torch.tensor([[action]], device=device, dtype=torch.long),
+                          torch.tensor([[reward]], device=device, dtype=torch.float),
+                          torch.tensor(nextState.reshape(1, stateSize), device=device, dtype=torch.float),
+                          torch.tensor([[not done]], device=device, dtype=torch.long))
                 state = nextState
                 if done or t + 1 >= env.max_episode_steps:
                     break
@@ -225,10 +236,10 @@ def main():
                 gamma=0.99,
                 epsilon=0.2,
                 batchSize=128,
-                lr=0.001,
+                lr=0.0001,
                 hiddenSize=256,
                 updateStride=5)
-    agt.DeepQLearning(env, buf, episodeNum=1000)
+    agt.DeepQLearning(env, buf, episodeNum=1000, preExploreTime=1000)
     # env.test()
 
 if __name__ == "__main__":
