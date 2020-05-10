@@ -1,4 +1,14 @@
 A4/DQN_nodecay/DQN_step.npy
 A4/DQN_nodecay/DQN_score.npy
+A4/DQN_nodecay/DQN_loss.npy
+A4/DQN_nodecay/DQN_smooth_step.npy
+A4/DQN_nodecay/DQN_smooth_score.npy
 A4/DQN_nodecay/net.pkl
 A4/DQN_nodecay/targetNet.pkl
+A4/DQN_decay/DQN_step.npy
+A4/DQN_decay/DQN_score.npy
+A4/DQN_decay/DQN_loss.npy
+A4/DQN_decay/DQN_smooth_step.npy
+A4/DQN_decay/DQN_smooth_score.npy
+A4/DQN_decay/net.pkl
+A4/DQN_decay/targetNet.pkl

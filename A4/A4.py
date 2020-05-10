@@ -4,6 +4,7 @@ import pandas as pd
 from collections import namedtuple
 from itertools import count
 import random
+import math
 import gym
 import torch
 import torch.nn as nn
@@ -32,9 +33,10 @@ class Enviroment:
         if done:
             reward = 1000
         else:
-            reward = self.height(state[0]) + state[1]
+            #reward = self.height(state[0]) + state[1]
+            reward = self.height(state[0])
             if state[0] > self.env.goal_position - 0.1 and state[1] > 0.0:
-                reward += 45.0 * state[0] - 12.5
+                reward += 1.0
         return state, reward, done, info
     
     def height(self, xs):
@@ -79,7 +81,10 @@ class Agent:
         self.actionSpace = [i for i in range(self.actionNum)]
         self.stateSize = observationSpace.shape[0]
         self.gamma = gamma
-        self.epsilon = epsilon
+        self.epsilon = epsilon[0]
+        self.EPS_START = epsilon[0]
+        self.EPS_END = epsilon[1]
+        self.EPS_DECAY = epsilon[2]
         self.batchSize = batchSize
         self.lr = lr
         self.hiddenSize = hiddenSize
@@ -99,6 +104,12 @@ class Agent:
             with torch.no_grad():
                 return self.net(state).max(1)[1].view(1, 1)
     
+    def epsilonDecay(self, N):
+        self.epsilon = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1.0 * N / self.EPS_DECAY)
+        # if N >= 10000:
+            # self.epsilon = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1.0 * (N - 10000) / self.EPS_DECAY)
+
+
     def optimzeDQN(self, buf):
         if len(buf) < self.batchSize:
             print("Can't fetch enough exp!")
@@ -119,22 +130,17 @@ class Agent:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        return loss.item()
 
-    def preExplore(self, env, buf, preExploreTime):
-        self.targetNet.load_state_dict(self.net.state_dict())
-        for i in range(preExploreTime):
-            self.optimzeDQN(buf)
-            if i % self.updateStride == 0:
-                self.targetNet.load_state_dict(self.net.state_dict())
-
-    def DeepQLearning(self, env, buf, episodeNum, preExploreTime):
-        # self.preExplore(env, buf, preExploreTime)
+    def DeepQLearning(self, env, buf, episodeNum, ifDecay=True):
         totalN = 0
         scores = []
         steps = []
+        losses = []
         self.targetNet.load_state_dict(self.net.state_dict())
         for i in range(episodeNum):
             score = 0.0
+            rewardDecay = 1.0
             state = env.reset()
             for t in count():
                 env.render()
@@ -146,19 +152,24 @@ class Agent:
                           torch.tensor(nextState.reshape(1, self.stateSize), device=device, dtype=torch.float),
                           torch.tensor([[not done]], device=device, dtype=torch.long))
                 state = nextState
-                score += reward
-                self.optimzeDQN(buf)
+                score += rewardDecay * reward
+                rewardDecay *= self.gamma
+                loss = self.optimzeDQN(buf)
+                losses.append(loss)
+                if ifDecay:
+                    self.epsilonDecay(totalN)
                 totalN += 1
                 if totalN % self.updateStride == 0:
                     self.targetNet.load_state_dict(self.net.state_dict())
                 if done or t + 1 >= env.max_episode_steps:
                     scores.append(score)
                     steps.append(t + 1)
-                    print("Episode %d ended after %d timesteps with score %f" % (i + 1, t + 1, score))
+                    print("Episode %d ended after %d timesteps with score %f, epsilon=%f" % (i + 1, t + 1, score, self.epsilon))
                     break
         
         np.save('DQN_score', scores)
         np.save('DQN_step', steps)
+        np.save('DQN_loss',losses)
         torch.save(self.net.state_dict(), 'net.pkl')
         torch.save(self.targetNet.state_dict(), 'targetNet.pkl')
 
@@ -222,10 +233,13 @@ def draw(episodeNum, methodName, suffix, filterSize):
     loose_range = []
     scores = np.load(methodName + '_score.npy')
     steps = np.load(methodName + '_step.npy')
+    losses = np.load(methodName + '_loss.npy')
     for i in range(0, episodeNum, filterSize):
         scores_filtered.append(np.mean(scores[i: i + filterSize]))
         steps_filtered.append(np.mean(steps[i: i + filterSize]))
         loose_range.append(i + filterSize / 2)
+    np.save('smooth_score', scores_filtered)
+    np.save('smooth_step', steps_filtered)
     plt.figure()
     plt.plot(ep_range, scores, alpha=0.8)
     plt.plot(loose_range, scores_filtered)
@@ -240,29 +254,35 @@ def draw(episodeNum, methodName, suffix, filterSize):
     plt.xlabel('episode')
     plt.ylabel('step')
     plt.savefig('step')
+    plt.figure()
+    plt.plot(losses)
+    plt.title('MountainCar')
+    plt.xlabel('time')
+    plt.ylabel('loss')
+    plt.savefig('loss')
 
-    # data = []
-    # net = DQN(2, 256, 3)
-    # net.load_state_dict(torch.load('net' + suffix + '.pkl'))
-    # for i in range(10000):
-    #     data.append(torch.tensor([[np.random.uniform(-1.2, 0.6), np.random.uniform(-0.07, 0.07)]], dtype=torch.float))
-    # data = torch.cat(data)
-    # with torch.no_grad():
-    #     label = net(data).max(1)[1].view(-1).numpy()
-    # data = pd.DataFrame(data.numpy(), columns=['x', 'y'])
-    # label = pd.DataFrame(label, columns=['label'])
-    # colors = [plt.cm.tab10(i / float(4.0)) for i in range(4)]
-    # data = pd.concat([data, label], axis=1)
+    data = []
+    net = DQN(2, 256, 3)
+    net.load_state_dict(torch.load('net' + suffix + '.pkl'))
+    for i in range(10000):
+        data.append(torch.tensor([[np.random.uniform(-1.2, 0.6), np.random.uniform(-0.07, 0.07)]], dtype=torch.float))
+    data = torch.cat(data)
+    with torch.no_grad():
+        label = net(data).max(1)[1].view(-1).numpy()
+    data = pd.DataFrame(data.numpy(), columns=['x', 'y'])
+    label = pd.DataFrame(label, columns=['label'])
+    colors = [plt.cm.tab10(i / float(4.0)) for i in range(4)]
+    data = pd.concat([data, label], axis=1)
 
-    # actionName = ['left', 'neutral', 'right']
-    # plt.figure()
-    # for i in range(3):
-    #     plt.scatter(data.loc[data.label == i].x, data.loc[data.label == i].y, s=10, label=actionName[i], cmap=colors[i], alpha=0.5)
-    # plt.title('Policy')
-    # plt.legend()
-    # plt.xlabel('position')
-    # plt.ylabel('velocity')
-    # plt.savefig(methodName + '_policy')
+    actionName = ['left', 'neutral', 'right']
+    plt.figure()
+    for i in range(3):
+        plt.scatter(data.loc[data.label == i].x, data.loc[data.label == i].y, s=10, label=actionName[i], cmap=colors[i], alpha=0.5)
+    plt.title('Policy')
+    plt.legend()
+    plt.xlabel('position')
+    plt.ylabel('velocity')
+    plt.savefig(methodName + '_policy')
     
 def main():
     env = Enviroment(maxSteps=500)
@@ -271,12 +291,13 @@ def main():
     agt = Agent(env.getActionSpace(),
                 env.getObservationSpace(),
                 gamma=0.99,
-                epsilon=0.2,
+                epsilon=[0.1, None, None],
+                # epsilon=[0.9, 0.1, 10000],
                 batchSize=128,
                 lr=0.0001,
                 hiddenSize=256,
                 updateStride=5)
-    # agt.DeepQLearning(env, buf, episodeNum=1000, preExploreTime=1000)
+    agt.DeepQLearning(env, buf, episodeNum=1000, ifDecay=False)
     draw(1000, 'DQN', '', 50)
     env.close()
 
