@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from collections import namedtuple
 from itertools import count
 import random
@@ -15,7 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Enviroment:
     def __init__(self, maxSteps):
         self.env = gym.make('MountainCar-v0').unwrapped
-        self.max_episode_steps = 500
+        self.max_episode_steps = maxSteps
 
     def reset(self):
         return self.env.reset()
@@ -32,8 +33,8 @@ class Enviroment:
             reward = 1000
         else:
             reward = self.height(state[0]) + state[1]
-            if state[0] > self.env.goal_position - 0.1:
-                reward += 100 * (state[0] - self.env.goal_position + 0.1)
+            if state[0] > self.env.goal_position - 0.1 and state[1] > 0.0:
+                reward += 45.0 * state[0] - 12.5
         return state, reward, done, info
     
     def height(self, xs):
@@ -160,19 +161,6 @@ class Agent:
         np.save('DQN_step', steps)
         torch.save(self.net.state_dict(), 'net.pkl')
         torch.save(self.targetNet.state_dict(), 'targetNet.pkl')
-        ep_range = [i + 1 for i in range(episodeNum)]
-        plt.figure()
-        plt.plot(ep_range, scores)
-        plt.title('MountainCar')
-        plt.xlabel('episode')
-        plt.ylabel('score')
-        plt.savefig('score')
-        plt.figure()
-        plt.plot(ep_range, steps)
-        plt.title('MountainCar')
-        plt.xlabel('episode')
-        plt.ylabel('step')
-        plt.savefig('step')
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -227,8 +215,57 @@ class DQN(nn.Module):
         x = F.leaky_relu(self.fc3(x))
         return x
 
+def draw(episodeNum, methodName, suffix, filterSize):
+    scores_filtered = []
+    steps_filtered = []
+    ep_range = [i + 1 for i in range(episodeNum)]
+    loose_range = []
+    scores = np.load(methodName + '_score.npy')
+    steps = np.load(methodName + '_step.npy')
+    for i in range(0, episodeNum, filterSize):
+        scores_filtered.append(np.mean(scores[i: i + filterSize]))
+        steps_filtered.append(np.mean(steps[i: i + filterSize]))
+        loose_range.append(i + filterSize / 2)
+    plt.figure()
+    plt.plot(ep_range, scores, alpha=0.8)
+    plt.plot(loose_range, scores_filtered)
+    plt.title('MountainCar')
+    plt.xlabel('episode')
+    plt.ylabel('score')
+    plt.savefig('score')
+    plt.figure()
+    plt.plot(ep_range, steps, alpha=0.8)
+    plt.plot(loose_range, steps_filtered)
+    plt.title('MountainCar')
+    plt.xlabel('episode')
+    plt.ylabel('step')
+    plt.savefig('step')
+
+    # data = []
+    # net = DQN(2, 256, 3)
+    # net.load_state_dict(torch.load('net' + suffix + '.pkl'))
+    # for i in range(10000):
+    #     data.append(torch.tensor([[np.random.uniform(-1.2, 0.6), np.random.uniform(-0.07, 0.07)]], dtype=torch.float))
+    # data = torch.cat(data)
+    # with torch.no_grad():
+    #     label = net(data).max(1)[1].view(-1).numpy()
+    # data = pd.DataFrame(data.numpy(), columns=['x', 'y'])
+    # label = pd.DataFrame(label, columns=['label'])
+    # colors = [plt.cm.tab10(i / float(4.0)) for i in range(4)]
+    # data = pd.concat([data, label], axis=1)
+
+    # actionName = ['left', 'neutral', 'right']
+    # plt.figure()
+    # for i in range(3):
+    #     plt.scatter(data.loc[data.label == i].x, data.loc[data.label == i].y, s=10, label=actionName[i], cmap=colors[i], alpha=0.5)
+    # plt.title('Policy')
+    # plt.legend()
+    # plt.xlabel('position')
+    # plt.ylabel('velocity')
+    # plt.savefig(methodName + '_policy')
+    
 def main():
-    env = Enviroment(maxSteps=1000)
+    env = Enviroment(maxSteps=500)
     buf = ReplayBuffer(capacity=10000)
     buf.fill(env, initLen=1000)
     agt = Agent(env.getActionSpace(),
@@ -239,25 +276,9 @@ def main():
                 lr=0.0001,
                 hiddenSize=256,
                 updateStride=5)
-    agt.DeepQLearning(env, buf, episodeNum=1000, preExploreTime=1000)
-    # env.test()
+    # agt.DeepQLearning(env, buf, episodeNum=1000, preExploreTime=1000)
+    draw(1000, 'DQN', '', 50)
+    env.close()
 
 if __name__ == "__main__":
     main()
-
-# env = gym.make('MountainCar-v0')
-# env._max_episode_steps = 500
-# for i in range(10):
-#     observation = env.reset()
-#     t = 0
-#     done = False
-#     while not done:
-#         env.render()
-#         action = env.action_space.sample()
-#         observation, reward, done, _ = env.step(action)
-#         if done:
-#             print(observation)
-#             print("Episode %d ended after %d timesteps" % (i + 1, t + 1))
-#             break
-#         t += 1
-# env.close()

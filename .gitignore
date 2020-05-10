@@ -1,4 +1,4 @@
-A4/DQN_step.npy
-A4/DQN_score.npy
-A4/net.pkl
-A4/targetNet.pkl
+A4/DQN_nodecay/DQN_step.npy
+A4/DQN_nodecay/DQN_score.npy
+A4/DQN_nodecay/net.pkl
+A4/DQN_nodecay/targetNet.pkl
