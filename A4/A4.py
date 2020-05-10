@@ -33,14 +33,13 @@ class Enviroment:
         if done:
             reward = 1000
         else:
-            #reward = self.height(state[0]) + state[1]
-            reward = self.height(state[0])
+            reward = self.height(state[0]) + state[1]
             if state[0] > self.env.goal_position - 0.1 and state[1] > 0.0:
                 reward += 1.0
         return state, reward, done, info
     
     def height(self, xs):
-        return np.sin(3 * xs)*.45+.55
+        return np.sin(3 * xs) * .45 + .55
 
     def getActionSpace(self):
         return self.env.action_space
@@ -75,7 +74,7 @@ class Enviroment:
         self.env.close()
 
 class Agent:
-    def __init__(self, actionSpace, observationSpace, gamma, epsilon, batchSize, lr, hiddenSize, updateStride):
+    def __init__(self, actionSpace, observationSpace, gamma, epsilon, tau, batchSize, lr, hiddenSize, updateStride):
         self.actionSpace = actionSpace
         self.actionNum = actionSpace.n
         self.actionSpace = [i for i in range(self.actionNum)]
@@ -85,6 +84,7 @@ class Agent:
         self.EPS_START = epsilon[0]
         self.EPS_END = epsilon[1]
         self.EPS_DECAY = epsilon[2]
+        self.tau = tau
         self.batchSize = batchSize
         self.lr = lr
         self.hiddenSize = hiddenSize
@@ -106,9 +106,6 @@ class Agent:
     
     def epsilonDecay(self, N):
         self.epsilon = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1.0 * N / self.EPS_DECAY)
-        # if N >= 10000:
-            # self.epsilon = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1.0 * (N - 10000) / self.EPS_DECAY)
-
 
     def optimzeDQN(self, buf):
         if len(buf) < self.batchSize:
@@ -122,8 +119,31 @@ class Agent:
         nextStateBatch = torch.cat(batch.nextState) # batchSize * stateSpace.shape[0]
         doneBatch = torch.cat(batch.done) # batchSize * 1
 
+        Q = self.net(stateBatch).gather(1, actionBatch)  # get Q(s_t, a)
+        targetQ = self.targetNet(nextStateBatch).max(1)[0].view(-1, 1) # max_a Q'(s_t+1, a)
+        y = (targetQ * self.gamma) * doneBatch + rewardBatch
+        loss = F.mse_loss(Q, y)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
+    
+    def optimzeDDQN(self, buf):
+        if len(buf) < self.batchSize:
+            print("Can't fetch enough exp!")
+            return
+        exps = buf.sample(self.batchSize)
+        batch = Exp(*zip(*exps))  # batch => Exp of batch
+        stateBatch = torch.cat(batch.state) # batchSize * stateSpace.shape[0]
+        actionBatch = torch.cat(batch.action) # batchSize * 1
+        rewardBatch = torch.cat(batch.reward) # batchSize * 1
+        nextStateBatch = torch.cat(batch.nextState) # batchSize * stateSpace.shape[0]
+        doneBatch = torch.cat(batch.done) # batchSize * 1
+
         Q = self.net(stateBatch).gather(1, actionBatch)  # get Q(s, a)
-        targetQ = self.targetNet(nextStateBatch).max(1)[0].view(-1, 1)
+        targetAction = self.targetNet(nextStateBatch).max(1)[1].view(-1, 1)  # get argmax Q'(s_t+1, a)
+        targetQ = self.net(nextStateBatch).gather(1, targetAction)
         y = (targetQ * self.gamma) * doneBatch + rewardBatch
         loss = F.mse_loss(Q, y)
 
@@ -173,6 +193,49 @@ class Agent:
         torch.save(self.net.state_dict(), 'net.pkl')
         torch.save(self.targetNet.state_dict(), 'targetNet.pkl')
 
+    def DoubleDeepQLearning(self, env, buf, episodeNum, ifDecay=True):
+        totalN = 0
+        scores = []
+        steps = []
+        losses = []
+        self.targetNet.load_state_dict(self.net.state_dict())
+        for i in range(episodeNum):
+            score = 0.0
+            rewardDecay = 1.0
+            state = env.reset()
+            for t in count():
+                env.render()
+                action = self.getAction(torch.tensor(state.reshape(1, self.stateSize), device=device, dtype=torch.float))
+                nextState, reward, done, _ = env.step(action.item())
+                buf.push(torch.tensor(state.reshape(1, self.stateSize), device=device, dtype=torch.float),
+                          action,
+                          torch.tensor([[reward]], device=device, dtype=torch.float),
+                          torch.tensor(nextState.reshape(1, self.stateSize), device=device, dtype=torch.float),
+                          torch.tensor([[not done]], device=device, dtype=torch.long))
+                state = nextState
+                score += rewardDecay * reward
+                rewardDecay *= self.gamma
+                loss = self.optimzeDDQN(buf)
+                losses.append(loss)
+                if ifDecay:
+                    self.epsilonDecay(totalN)
+                totalN += 1
+                if totalN % self.updateStride == 0:
+                    self.targetNet.load_state_dict(self.net.state_dict())
+                    # for targetParam, param in zip(self.targetNet.parameters(), self.net.parameters()):
+                    #     targetParam.data.copy_(self.tau * targetParam + (1 - self.tau) * param)
+                if done or t + 1 >= env.max_episode_steps:
+                    scores.append(score)
+                    steps.append(t + 1)
+                    print("Episode %d ended after %d timesteps with score %f, epsilon=%f" % (i + 1, t + 1, score, self.epsilon))
+                    break
+        
+        np.save('DDQN_score', scores)
+        np.save('DDQN_step', steps)
+        np.save('DDQN_loss',losses)
+        torch.save(self.net.state_dict(), 'net.pkl')
+        torch.save(self.targetNet.state_dict(), 'targetNet.pkl')
+
 class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
@@ -218,9 +281,6 @@ class DQN(nn.Module):
         self.fc3 = nn.Linear(hiddenSize, outputSize)
 
     def forward(self, x):
-        # x = F.sigmoid(self.fc1(x))
-        # x = F.sigmoid(self.fc2(x))
-        # x = F.sigmoid(self.fc3(x))
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
         x = F.leaky_relu(self.fc3(x))
@@ -286,19 +346,21 @@ def draw(episodeNum, methodName, suffix, filterSize):
     
 def main():
     env = Enviroment(maxSteps=500)
-    buf = ReplayBuffer(capacity=10000)
+    buf = ReplayBuffer(capacity=100000)
     buf.fill(env, initLen=1000)
     agt = Agent(env.getActionSpace(),
                 env.getObservationSpace(),
                 gamma=0.99,
-                epsilon=[0.1, None, None],
-                # epsilon=[0.9, 0.1, 10000],
+                # epsilon=[0.1, None, None],
+                epsilon=[0.9, 0.1, 10000],
+                tau=0.01,
                 batchSize=128,
                 lr=0.0001,
                 hiddenSize=256,
                 updateStride=5)
-    agt.DeepQLearning(env, buf, episodeNum=1000, ifDecay=False)
-    draw(1000, 'DQN', '', 50)
+    # agt.DeepQLearning(env, buf, episodeNum=1000, ifDecay=False)
+    #agt.DoubleDeepQLearning(env, buf, episodeNum=1000, ifDecay=True)
+    draw(1000, 'DDQN', '', 50)
     env.close()
 
 if __name__ == "__main__":
