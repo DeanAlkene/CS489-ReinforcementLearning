@@ -55,22 +55,6 @@ class Enviroment:
         print("Low")
         print(env.observation_space.low)
 
-    def test(self):
-        for i in range(10):
-            observation = self.env.reset()
-            t = 0
-            done = False
-            while not done:
-                self.env.render()
-                action = self.env.action_space.sample()
-                observation, reward, done, _ = self.env.step(action)
-                if done:
-                    print(observation)
-                    print("Episode %d ended after %d timesteps" % (i + 1, t + 1))
-                    break
-                t += 1
-        self.env.close()
-
 class Agent:
     def __init__(self, actionSpace, observationSpace, gamma, epsilon, tau, batchSize, lr, hiddenSize, updateStride):
         self.actionSpace = actionSpace
@@ -391,10 +375,10 @@ def main():
                 lr=0.001,
                 hiddenSize=256,
                 updateStride=10)
-    # agt.DeepQLearning(env, buf, episodeNum=10000, ifDecay=True)
+    agt.DeepQLearning(env, buf, episodeNum=10000, ifDecay=True)
     # agt.DoubleDeepQLearning(env, buf, episodeNum=5000, ifDecay=True)
     # draw(5000, 'DDQN', '', 50)
-    testNet(env, 'DDQN')
+    # testNet(env, 'DDQN')
     env.close()
 
 if __name__ == "__main__":
