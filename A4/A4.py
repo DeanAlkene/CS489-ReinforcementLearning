@@ -231,7 +231,7 @@ class ReplayBuffer:
     def __init__(self, capacity):
         self.capacity = capacity
         self.buffer = []
-        self.position = 0 #for recursive queue
+        self.position = 0 #for recursive array
 
     def __len__(self):
         return len(self.buffer)
