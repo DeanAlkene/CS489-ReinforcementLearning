@@ -368,14 +368,13 @@ def main():
     agt = Agent(env.getActionSpace(),
                 env.getObservationSpace(),
                 gamma=0.99,
-                # epsilon=[0.1, None, None],
                 epsilon=[1.0, 0.01, 20000],
                 tau=0.01,
                 batchSize=128,
                 lr=0.001,
                 hiddenSize=256,
                 updateStride=10)
-    agt.DeepQLearning(env, buf, episodeNum=10000, ifDecay=True)
+    agt.DeepQLearning(env, buf, episodeNum=5000, ifDecay=True)
     # agt.DoubleDeepQLearning(env, buf, episodeNum=5000, ifDecay=True)
     # draw(5000, 'DDQN', '', 50)
     # testNet(env, 'DDQN')
