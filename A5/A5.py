@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.multiprocessing as mp
 
 Exp = namedtuple('Exp', ('state', 'action', 'reward', 'nextState', 'done'))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,6 +47,17 @@ class Enviroment:
         print(env.observation_space.high)
         print("Low")
         print(env.observation_space.low)
+
+class SharedAdam(optim.Adam):
+    def __init__(self, params, lr, betas, eps, weight_decay, amsgrad):
+        super(SharedAdam, self).__init__(params, lr, betas, eps, weight_decay, amsgrad)
+
+class ACNet(nn.Module):
+    pass
+
+class Workers(mp.Process):
+    pass
+
 
 env = Enviroment()
 state = env.reset()
