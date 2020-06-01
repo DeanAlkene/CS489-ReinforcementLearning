@@ -51,8 +51,8 @@ class ACNet(nn.Module):
 
     def forward(self, x):
         actor1 = F.relu6(self.actor1(x))
-        mu = 2 * F.tanh(self.mu(actor1))
-        sigma = F.softplus(self.sigma(actor1)) + 0.0001
+        mu = 2 * torch.tanh(self.mu(actor1))
+        sigma = F.softplus(self.sigma(actor1)) + 0.001
         critic1 = F.relu6(self.critic1(x))
         value = self.value(critic1)
         return mu, sigma, value
@@ -70,9 +70,10 @@ class ACNet(nn.Module):
 
     def selectAction(self, state):
         self.training = False
-        mu, sigma, _ = self.forward(state)
-        dist = self.distribution(mu.view(1, -1).detach(), sigma.view(1, -1).detach())
-        return dist.sample().numpy()
+        with torch.no_grad():
+            mu, sigma, _ = self.forward(state)
+            dist = self.distribution(mu.detach(), sigma.detach())
+            return dist.sample().numpy()
 
 class Worker(mp.Process):
     def __init__(self, rank, globalNet, localNet, optimizer, totalEpisode, globalReturn, Q, params):
@@ -148,6 +149,7 @@ class Worker(mp.Process):
         )
         self.opt.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.LNet.parameters(), 20)
         for l, g in zip(self.LNet.parameters(), self.GNet.parameters()):
             g._grad = l.grad
         self.opt.step()
@@ -193,14 +195,29 @@ class A3C:
         torch.save(self.globalNet.state_dict(), 'net.pkl')
         self.env.close()
 
+def test():
+    env = gym.make('Pendulum-v0').unwrapped
+    net = ACNet(env.observation_space.shape[0], 256, env.action_space.shape[0])
+    net.load_state_dict(torch.load('net.pkl'))
+    #for _ in range(100):
+    state = env.reset()
+    # for i in range(200):
+    while True:
+        env.render()
+        action = net.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
+        nextState, reward, done, _ = env.step(action.clip(-2, 2))
+        state = nextState
+
 def main():
-    a3c = A3C(gamma=0.99,
-              updateStride=5,
-              maxEps=10000,
-              maxSteps=300,
-              hiddenSize=256,
-              lr=1e-4)
-    a3c.train()
+    # a3c = A3C(gamma=0.99,
+    #           updateStride=20,
+    #           maxEps=10000,
+    #           maxSteps=200,
+    #           hiddenSize=256,
+    #           lr=1e-4)
+    # a3c.train()
+    test()
+
 
 if __name__ == '__main__':
     main()
