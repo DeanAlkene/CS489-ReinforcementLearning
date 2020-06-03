@@ -57,10 +57,10 @@ class ACNet(nn.Module):
         value = self.value(critic1)
         return mu, sigma, value
     
-    def loss(self, state, action, v):
+    def loss(self, state, action, R):
         self.train()
         mu, sigma, value = self.forward(state)
-        error = v - value
+        error = R - value
         critic_loss = error.pow(2)
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
