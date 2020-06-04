@@ -47,7 +47,10 @@ Asynchronous Advantage Actor-Critic (A3C) is a improved algorithm of original Ac
 
 The algorithm will first initialize the global network and start all workers. A worker will reset gradients $d\theta$, $d\theta_v=0$ at the beginning of each episode and then interacts with environment and record states, actions and rewards. After a certain steps, it will calculate the return values of each states then calculate value and policy losses and optimize the global network using the accumulated gradient of both losses by
 $$
-d\theta \leftarrow d\theta + \nabla_{\theta'}\log \pi(a_i|s_i;\theta')(R-V(s_i;\theta_v')) \\
+d\theta \leftarrow d\theta + \nabla_{\theta'}\log \pi(a_i|s_i;\theta')(R-V(s_i;\theta_v')) 
+$$
+
+$$
 d\theta_v\leftarrow d\theta_v + \partial(R-V(s_i;\theta_v'))^2/\partial\theta_v'
 $$
 
@@ -289,6 +292,8 @@ Notice that we have to make the parameters of global network shared using `globa
 
 ## 2. Result & Discussion
 
+After training for about 10000 episodes, we can keep the pendulum standing up once an episode starts. Wherever the pendulum is initialized, our algorithm will spin it up to the right position and apply small efforts to keep its balance. I will provide the network parameters. And you can test it using `test()` defined in the code.
+
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
@@ -300,11 +305,31 @@ Notice that we have to make the parameters of global network shared using `globa
     color: #999;
     padding: 2px;">Fig.3 Result</div>
 </center>
+However, it's not easy to train A3C. During my training process, I found the following problems:
+
+1. Hyper parameter & initialization sensitivity
+2. Instability
+3. Cannot utilize CUDA
+
+For the first problem, here are my final hyper parameter settings:
+
+| Hyper Parameter                     | Value  |
+| ----------------------------------- | ------ |
+| number of workers                   | 8      |
+| max steps per episode               | 200    |
+| hidden layer size of actor network  | 256    |
+| hidden layer size of critic network | 256    |
+| discount $\gamma$                   | 0.99   |
+| learning rate $\alpha$              | 0.0001 |
+| global network update stride        | 20     |
+| total training episodes             | 10000  |
+
+I found that when the stride of updating global network is 5 or 10, the algorithm will hit the best episode return value of about -100 in 4000 episodes. However, after 5000 episodes, the performance dropped sharply and fell back to around -600, which is the same as it in the beginning of training. It is probably due to the short sight effect when using little experience to adjust the global network. When I set the stride to 20, it seemed the problem solved. However, it will cost more time to train, as you can see in the following figure, we first hit -100 after 7000 episodes. We also don't know if the performance will drop if we train it for more episodes. Also, if the initialization has some problem, we have to re-train it. Sometimes, the moving average return will fluctuate around -600 and the network learns a bad policy. But sometimes, we will get the result in Fig. 4.
 
 <center>
     <img style="border-radius: 0.3125em;
     box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
-    src="../res.png"
+    src="../res99.png"
     width=500>
     <br>
     <div style="color:orange; border-bottom: 1px solid #d9d9d9;
@@ -313,9 +338,29 @@ Notice that we have to make the parameters of global network shared using `globa
     padding: 2px;">Fig.4 Moving Average of Episode Returns</div>
 </center>
 
+As mentioned it's a bit slow to train A3C, so I reduced $\gamma$ from 0.99 to 0.9 and recorded the moving average discounted return value.
+
+<center>
+    <img style="border-radius: 0.3125em;
+    box-shadow: 0 2px 4px 0 rgba(34,36,38,.12),0 2px 10px 0 rgba(34,36,38,.08);" 
+    src="../res9.png"
+    width=500>
+    <br>
+    <div style="color:orange; border-bottom: 1px solid #d9d9d9;
+    display: inline-block;
+    color: #999;
+    padding: 2px;">Fig.5 Moving Average of Episode Returns, gamma=0.9</div>
+</center>
+I used discounted return , so the curve seems a bit messy and instable. However, you can observe that in Fig. 5, it converged in about 1500 episodes. After that point, the result fluctuates around -45 and the Pendulum can always stand up. So, the value of $\gamma$ also affects the result a lot.
+
+For the second problem, in Fig.4, you can observe some valleys in the curve. Those valleys show that the random policy always has the problem of instability especially in the circumstance that a little randomness will lead to a huge failure. If we sample the distribution, we cannot avoid sampling some outliers and make the situation worse. Fortunately, in the most of time, it will sample the right thing and thus can lead to a good result. So, I think we DDPG may perform better in Pendulum environment due to its deterministic property.
+
+For the last problem, it's hard to run multiple workers (processes) and put all the local network to GPU. It will incur the memory allocation failure due to the memory limitation of my GPU. So, I just train those networks in CPU and, fortunately, A3C with Pendulum is not hard to run and I got good results.
 
 ### 3. Acknowledgement
 
-https://github.com/MorvanZhou/pytorch-A3C
+When implementing my A3C algorithm, I referred to the following GitHub repositories, which helped me a lot. I learned the network structure, the loss function and also coding techniques using `torch` from those codes.
 
-https://github.com/ikostrikov/pytorch-a3c
+- https://github.com/MorvanZhou/pytorch-A3C
+
+- https://github.com/ikostrikov/pytorch-a3c
