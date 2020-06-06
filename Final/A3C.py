@@ -72,7 +72,7 @@ class ACNet(nn.Module):
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
         entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(dist.scale)
-        actor_loss = -(log_prob * error.detach() + 0.0001 * entropy)
+        actor_loss = -(log_prob * error.detach() + 0.0005 * entropy)
         return (critic_loss + actor_loss).mean()
 
     def selectAction(self, state):
@@ -104,8 +104,8 @@ class Worker(mp.Process):
             #rewardDecay = 1.0
 
             for t in range(self.params['MAX_STEP']):
-                if self.rank == 0:
-                    self.env.render()
+                #if self.rank == 0:
+                #    self.env.render()
                 action = self.LNet.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
                 nextState, reward, done, _ = self.env.step(action)
                 if t == self.params['MAX_STEP'] - 1:
