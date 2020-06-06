@@ -68,7 +68,7 @@ class ACNet(nn.Module):
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
         entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(dist.scale)
-        actor_loss = -(log_prob * error.detach() + 0.0005 * entropy)
+        actor_loss = -(log_prob * error.detach() + 0.001 * entropy)
         return (critic_loss + actor_loss).mean()
 
     def selectAction(self, state):
@@ -112,7 +112,6 @@ class Worker(mp.Process):
                 stateBuf.append(state.reshape(-1))
                 actionBuf.append(action)
                 rewardBuf.append(reward)
-
                 if steps % self.params['UPDATE_STRIDE'] == 0 or done:
                     self.learn(nextState, done, stateBuf, actionBuf, rewardBuf)
                     stateBuf, actionBuf, rewardBuf = [], [], []
@@ -127,9 +126,7 @@ class Worker(mp.Process):
                                 self.totR.value = self.totR.value * 0.9 + ret * 0.1
                         self.Q.put(self.totR.value)
                         print("Rank: %d\tEps: %d\tTotRet: %f\tSteps: %d" % (self.rank, self.totEps.value, self.totR.value, t + 1))
-                        if t + 1 <= 200:
-                            self.params['UPDATE_STRIDE'] = 10
-                        elif t + 1 > 200:
+                        if t + 1 <= 500:
                             self.params['UPDATE_STRIDE'] = 20
                         elif t + 1 > 500:
                             self.params['UPDATE_STRIDE'] = 50
@@ -223,12 +220,12 @@ def test():
                 break
 
 def main():
-    a3c = A3C(gamma=0.99,
-              updateStride=10,
-              maxEps=100000,
-              maxSteps=10000,
+    a3c = A3C(gamma=0.9,
+              updateStride=20,
+              maxEps=10000,
+              maxSteps=1000,
               hiddenSize=512,
-              lr=1e-4)
+              lr=1e-5)
     a3c.train()
     # test()
 
