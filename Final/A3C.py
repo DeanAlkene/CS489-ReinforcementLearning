@@ -36,13 +36,15 @@ class ACNet(nn.Module):
         super(ACNet, self).__init__()
         self.linear1 = nn.Linear(inputSize, hiddenSize)
         self.actor1 = nn.Linear(hiddenSize, hiddenSize // 2)
+        self.actor2 = nn.Linear(hiddenSize // 2, hiddenSize // 2)
         self.mu = nn.Linear(hiddenSize // 2, outputSize)
         self.sigma = nn.Linear(hiddenSize // 2, outputSize)
 
         self.critic1 = nn.Linear(hiddenSize, hiddenSize // 2)
-        self.value = nn.Linear(hiddenSize // 2, 1)
+        self.critic2 = nn.Linear(hiddenSize // 2, hiddenSize // 4)
+        self.value = nn.Linear(hiddenSize // 4, 1)
 
-        for l in [self.linear1, self.actor1, self.mu, self.sigma, self.critic1, self.value]:
+        for l in [self.linear1, self.actor1, self.actor2, self.mu, self.sigma, self.critic1, self.critic2, self.value]:
             self._initLayer(l)
 
         self.distribution = torch.distributions.Normal
@@ -54,10 +56,12 @@ class ACNet(nn.Module):
     def forward(self, inputs):
         x = F.leaky_relu(self.linear1(inputs))
         actor1 = F.leaky_relu(self.actor1(x))
-        mu = 2 * torch.tanh(self.mu(actor1))
-        sigma = F.softplus(self.sigma(actor1)) + 0.001
+        actor2 = F.leaky_relu(self.actor2(actor1))
+        mu = F.leaky_relu(self.mu(actor2))
+        sigma = F.softplus(self.sigma(actor2)) + 0.00001
         critic1 = F.leaky_relu(self.critic1(x))
-        value = self.value(critic1)
+        critic2 = F.leaky_relu(self.critic2(critic1))
+        value = self.value(critic2)
         return mu, sigma, value
     
     def loss(self, state, action, R):
@@ -68,7 +72,7 @@ class ACNet(nn.Module):
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
         entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(dist.scale)
-        actor_loss = -(log_prob * error.detach() + 0.001 * entropy)
+        actor_loss = -(log_prob * error.detach() + 0.0001 * entropy)
         return (critic_loss + actor_loss).mean()
 
     def selectAction(self, state):
@@ -100,8 +104,8 @@ class Worker(mp.Process):
             #rewardDecay = 1.0
 
             for t in range(self.params['MAX_STEP']):
-                # if self.rank == 0:
-                #     self.env.render()
+                if self.rank == 0:
+                    self.env.render()
                 action = self.LNet.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
                 nextState, reward, done, _ = self.env.step(action)
                 if t == self.params['MAX_STEP'] - 1:
@@ -222,8 +226,8 @@ def test():
 def main():
     a3c = A3C(gamma=0.9,
               updateStride=20,
-              maxEps=10000,
-              maxSteps=1000,
+              maxEps=500000,
+              maxSteps=10000,
               hiddenSize=512,
               lr=1e-5)
     a3c.train()
