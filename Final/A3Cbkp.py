@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.multiprocessing as mp
+from itertools import count
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = "cpu"
@@ -33,14 +34,16 @@ class SharedAdam(optim.Adam):
 class ACNet(nn.Module):
     def __init__(self, inputSize, hiddenSize, outputSize):
         super(ACNet, self).__init__()
-        self.actor1 = nn.Linear(inputSize, hiddenSize)
-        self.mu = nn.Linear(hiddenSize, outputSize)
-        self.sigma = nn.Linear(hiddenSize, outputSize)
+        self.linear1 = nn.Linear(inputSize, hiddenSize)
 
-        self.critic1 = nn.Linear(inputSize, hiddenSize)
-        self.value = nn.Linear(hiddenSize, 1)
+        self.actor1 = nn.Linear(hiddenSize, hiddenSize // 2)
+        self.mu = nn.Linear(hiddenSize // 2, outputSize)
+        self.sigma = nn.Linear(hiddenSize // 2, outputSize)
 
-        for l in [self.actor1, self.mu, self.sigma, self.critic1, self.value]:
+        self.critic1 = nn.Linear(hiddenSize, hiddenSize // 2)
+        self.value = nn.Linear(hiddenSize // 2, 1)
+
+        for l in [self.linear1, self.actor1, self.mu, self.sigma, self.critic1, self.value]:
             self._initLayer(l)
 
         self.distribution = torch.distributions.Normal
@@ -49,11 +52,14 @@ class ACNet(nn.Module):
         nn.init.normal_(layer.weight, mean=0.0, std=0.1)
         nn.init.constant_(layer.bias, 0.0)
 
-    def forward(self, x):
-        actor1 = F.relu6(self.actor1(x))
+    def forward(self, inputs):
+        x = F.leaky_relu(self.linear1(inputs))
+        actor1 = F.leaky_relu(self.actor1(x))
+        # actor2 = F.leaky_relu(self.actor2(actor1))
         mu = 2 * torch.tanh(self.mu(actor1))
-        sigma = F.softplus(self.sigma(actor1)) + 0.001
-        critic1 = F.relu6(self.critic1(x))
+        sigma = F.softplus(self.sigma(actor1)) + 0.00001
+        critic1 = F.leaky_relu(self.critic1(x))
+        # critic2 = F.leaky_relu(self.critic2(critic1))
         value = self.value(critic1)
         return mu, sigma, value
     
@@ -65,8 +71,8 @@ class ACNet(nn.Module):
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
         entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(dist.scale)
-        actor_loss = -(log_prob * error.detach() + 0.005 * entropy)
-        return (critic_loss + actor_loss).mean()
+        actor_loss = -(log_prob * error.detach() + 0.0001 * entropy)
+        return (critic_loss + 0.5 * actor_loss).mean()
 
     def selectAction(self, state):
         self.training = False
@@ -79,7 +85,7 @@ class Worker(mp.Process):
     def __init__(self, rank, globalNet, localNet, optimizer, totalEpisode, globalReturn, Q, params):
         super(Worker, self).__init__()
         self.rank = rank
-        self.env = gym.make('Pendulum-v0').unwrapped
+        self.env = gym.make('Hopper-v2').unwrapped
         self.GNet = globalNet
         self.LNet = localNet
         self.opt = optimizer
@@ -94,22 +100,21 @@ class Worker(mp.Process):
             stateBuf, actionBuf, rewardBuf = [], [], []
             state = self.env.reset()
             ret = 0.0
-            # rewardDecay = 1.0
+            #rewardDecay = 1.0
 
             for t in range(self.params['MAX_STEP']):
                 if self.rank == 0:
                     self.env.render()
                 action = self.LNet.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
-                nextState, reward, done, _ = self.env.step(action.clip(-2, 2))
+                nextState, reward, done, _ = self.env.step(action)
                 if t == self.params['MAX_STEP'] - 1:
                     done = True
                 ret += reward
-                # ret += rewardDecay * reward
-                # rewardDecay *= self.params['gamma']
+                #ret += rewardDecay * reward
+                #rewardDecay *= self.params['gamma']
                 stateBuf.append(state.reshape(-1))
                 actionBuf.append(action)
-                rewardBuf.append((reward + 8.1) / 8.1)
-
+                rewardBuf.append(reward)
                 if steps % self.params['UPDATE_STRIDE'] == 0 or done:
                     loss = self.learn(nextState, done, stateBuf, actionBuf, rewardBuf)
                     stateBuf, actionBuf, rewardBuf = [], [], []
@@ -123,7 +128,13 @@ class Worker(mp.Process):
                             else:
                                 self.totR.value = self.totR.value * 0.9 + ret * 0.1
                         self.Q.put(self.totR.value)
-                        print("Rank: %d\tEps: %d\tTotRet: %f\tLoss: %f"%(self.rank, self.totEps.value, self.totR.value, loss))
+                        print("Rank: %d\tEps: %d\tTotRet: %f\tSteps: %d\tLoss: %f" % (self.rank, self.totEps.value, self.totR.value, t + 1, loss))
+                        if t + 1 <= 500:
+                            self.params['UPDATE_STRIDE'] = 5
+                        elif t + 1 > 500:
+                            self.params['UPDATE_STRIDE'] = 20
+                        elif t + 1 > 1000:
+                            self.params['UPDATE_STRIDE'] = 50
                         break
                 
                 state = nextState
@@ -150,18 +161,18 @@ class Worker(mp.Process):
         )
         self.opt.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.LNet.parameters(), 20)
+        torch.nn.utils.clip_grad_norm_(self.LNet.parameters(), 40)
         for l, g in zip(self.LNet.parameters(), self.GNet.parameters()):
             g._grad = l.grad
         self.opt.step()
 
         self.LNet.load_state_dict(self.GNet.state_dict())
-
         return loss
+
 class A3C:
     def __init__(self, gamma, updateStride, maxEps, maxSteps, hiddenSize, lr):
         self.params = {'MAX_EPISODE': maxEps, 'MAX_STEP': maxSteps, 'UPDATE_STRIDE': updateStride, 'gamma': gamma, 'hiddenSize': hiddenSize}
-        self.env = gym.make('Pendulum-v0').unwrapped
+        self.env = gym.make('Hopper-v2').unwrapped
         self.globalNet = ACNet(self.env.observation_space.shape[0], hiddenSize, self.env.action_space.shape[0]).to(device)
         self.globalNet.share_memory()
         self.opt = SharedAdam(self.globalNet.parameters(), lr=lr, betas=(0.95, 0.999))
@@ -198,25 +209,29 @@ class A3C:
         self.env.close()
 
 def test():
-    env = gym.make('Pendulum-v0').unwrapped
-    net = ACNet(env.observation_space.shape[0], 256, env.action_space.shape[0])
-    net.load_state_dict(torch.load('net.pkl'))
+    env = gym.make('Hopper-v2').unwrapped
+    # net = ACNet(env.observation_space.shape[0], 256, env.action_space.shape[0])
+    # net.load_state_dict(torch.load('net.pkl'))
     state = env.reset()
-    while True:
-        env.render()
-        action = net.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
-        nextState, reward, done, _ = env.step(action.clip(-2, 2))
-        state = nextState
+    for i in range(10000):
+        for t in count():
+            env.render()
+            action = np.random.randn(1, env.action_space.shape[0])
+            nextState, reward, done, _ = env.step(action)
+            state = nextState
+            if done:
+                print("Episode %d ended in %d steps" % (i + 1, t + 1))
+                break
 
 def main():
     a3c = A3C(gamma=0.9,
               updateStride=5,
-              maxEps=10000,
-              maxSteps=200,
-              hiddenSize=256,
-              lr=1e-4)
+              maxEps=500000,
+              maxSteps=1000,
+              hiddenSize=512,
+              lr=1e-5)
     a3c.train()
-    test()
+    # test()
 
 if __name__ == '__main__':
     main()
