@@ -56,7 +56,7 @@ class ACNet(nn.Module):
         x = F.leaky_relu(self.linear1(inputs))
         actor1 = F.leaky_relu(self.actor1(x))
         # actor2 = F.leaky_relu(self.actor2(actor1))
-        mu = 2 * torch.tanh(self.mu(actor1))
+        mu = 2 * F.leaky_relu(self.mu(actor1))
         sigma = F.softplus(self.sigma(actor1)) + 0.00001
         critic1 = F.leaky_relu(self.critic1(x))
         # critic2 = F.leaky_relu(self.critic2(critic1))
@@ -71,7 +71,7 @@ class ACNet(nn.Module):
         dist = self.distribution(mu, sigma)
         log_prob = dist.log_prob(action)
         entropy = 0.5 + 0.5 * math.log(2 * math.pi) + torch.log(dist.scale)
-        actor_loss = -(log_prob * error.detach() + 0.0001 * entropy)
+        actor_loss = -(log_prob * error.detach() + 0.0005 * entropy)
         return (critic_loss + 0.5 * actor_loss).mean()
 
     def selectAction(self, state):
@@ -107,8 +107,8 @@ class Worker(mp.Process):
                     self.env.render()
                 action = self.LNet.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
                 nextState, reward, done, _ = self.env.step(action)
-                if t == self.params['MAX_STEP'] - 1:
-                    done = True
+                #if t == self.params['MAX_STEP'] - 1:
+                #    done = True
                 ret += reward
                 #ret += rewardDecay * reward
                 #rewardDecay *= self.params['gamma']
@@ -129,8 +129,10 @@ class Worker(mp.Process):
                                 self.totR.value = self.totR.value * 0.9 + ret * 0.1
                         self.Q.put(self.totR.value)
                         print("Rank: %d\tEps: %d\tTotRet: %f\tSteps: %d\tLoss: %f" % (self.rank, self.totEps.value, self.totR.value, t + 1, loss))
+                        if self.totR.value > 300:
+                            torch.save(self.GNet.state_dict(), 'net300.pkl')
                         if t + 1 <= 500:
-                            self.params['UPDATE_STRIDE'] = 5
+                            self.params['UPDATE_STRIDE'] = 10
                         elif t + 1 > 500:
                             self.params['UPDATE_STRIDE'] = 20
                         elif t + 1 > 1000:
@@ -161,7 +163,7 @@ class Worker(mp.Process):
         )
         self.opt.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.LNet.parameters(), 40)
+        torch.nn.utils.clip_grad_norm_(self.LNet.parameters(), 10)
         for l, g in zip(self.LNet.parameters(), self.GNet.parameters()):
             g._grad = l.grad
         self.opt.step()
@@ -225,8 +227,8 @@ def test():
 
 def main():
     a3c = A3C(gamma=0.9,
-              updateStride=5,
-              maxEps=500000,
+              updateStride=10,
+              maxEps=1000000,
               maxSteps=1000,
               hiddenSize=512,
               lr=1e-5)

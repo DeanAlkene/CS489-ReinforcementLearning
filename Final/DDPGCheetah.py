@@ -15,7 +15,7 @@ Exp = namedtuple('Exp', ('state', 'action', 'reward', 'nextState', 'done'))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class OrnsteinUhlenbeckActionNoise:
-	def __init__(self, actionSize, mu = 0, theta = 0.15, sigma = 0.2):
+	def __init__(self, actionSize, mu = 0, theta = 0.15, sigma = 0.1):
 		self.action_dim = actionSize
 		self.mu = mu
 		self.theta = theta
@@ -196,17 +196,17 @@ class DDPG:
                 state = nextState
             res.append(ret)
 
-        np.save('resDDPG', res)
+        np.save('resDDPG1', res)
         plt.plot(res)
         plt.ylabel('Return')
         plt.xlabel('Episodes')
-        plt.savefig('resDDPG.png')
-        torch.save(self.actor.state_dict(), 'netDDPG_A.pkl')
-        torch.save(self.critic.state_dict(), 'netDDPG_C.pkl')
+        plt.savefig('resDDPG1.png')
+        torch.save(self.actor.state_dict(), 'netDDPG_A1.pkl')
+        torch.save(self.critic.state_dict(), 'netDDPG_C1.pkl')
         self.env.close()
 
 def main():
-    env = gym.make('Hopper-v2')
+    env = gym.make('HalfCheetah-v2')
     buf = ReplayBuffer(1000000)
     buf.fill(env, 1000, 200)
     exps = buf.sample(1000)
