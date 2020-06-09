@@ -265,17 +265,17 @@ class DDPG:
             self.adapt(noise_counter)
             res.append(ret)
 
-        np.save('resDDPGN', res)
+        np.save('resDDPGNH', res)
         plt.plot(res)
         plt.ylabel('Return')
         plt.xlabel('Episodes')
-        plt.savefig('resDDPGN.png')
-        torch.save(self.actor.state_dict(), 'netDDPG_AN.pkl')
-        torch.save(self.critic.state_dict(), 'netDDPG_CN.pkl')
+        plt.savefig('resDDPGNH.png')
+        torch.save(self.actor.state_dict(), 'netDDPG_ANH.pkl')
+        torch.save(self.critic.state_dict(), 'netDDPG_CNH.pkl')
         self.env.close()
 
 def main():
-    env = gym.make('HalfCheetah-v2')
+    env = gym.make('Hopper-v2')
     buf = ReplayBuffer(1000000)
     buf.fill(env, 1000, 200)
     exps = buf.sample(1000)
