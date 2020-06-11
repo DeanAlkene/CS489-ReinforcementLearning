@@ -107,8 +107,8 @@ class Worker(mp.Process):
                     self.env.render()
                 action = self.LNet.selectAction(torch.from_numpy(state.reshape(1, -1).astype(np.float32)).to(device))
                 nextState, reward, done, _ = self.env.step(action)
-                #if t == self.params['MAX_STEP'] - 1:
-                #    done = True
+                if t == self.params['MAX_STEP'] - 1:
+                    done = True
                 ret += reward
                 #ret += rewardDecay * reward
                 #rewardDecay *= self.params['gamma']
