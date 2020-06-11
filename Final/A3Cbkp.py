@@ -211,7 +211,7 @@ class A3C:
         self.env.close()
 
 def test():
-    env = gym.make('Hopper-v2').unwrapped
+    env = gym.make('HalfCheetah-v2').unwrapped
     # net = ACNet(env.observation_space.shape[0], 256, env.action_space.shape[0])
     # net.load_state_dict(torch.load('net.pkl'))
     state = env.reset()
@@ -228,7 +228,7 @@ def test():
 def main():
     a3c = A3C(gamma=0.9,
               updateStride=10,
-              maxEps=100000,
+              maxEps=10000,
               maxSteps=1000,
               hiddenSize=512,
               lr=1e-5)

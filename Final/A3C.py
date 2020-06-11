@@ -240,7 +240,7 @@ def test():
 def main():
     a3c = A3C(gamma=0.9,
               updateStride=5,
-              maxEps=500000,
+              maxEps=100000,
               maxSteps=1000,
               hiddenSize=512,
               lr=1e-5)
