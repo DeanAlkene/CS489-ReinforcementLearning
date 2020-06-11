@@ -85,7 +85,7 @@ class Worker(mp.Process):
     def __init__(self, rank, globalNet, localNet, optimizer, totalEpisode, globalReturn, Q, params):
         super(Worker, self).__init__()
         self.rank = rank
-        self.env = gym.make('Hopper-v2').unwrapped
+        self.env = gym.make('HalfCheetah-v2').unwrapped
         self.GNet = globalNet
         self.LNet = localNet
         self.opt = optimizer
@@ -174,7 +174,7 @@ class Worker(mp.Process):
 class A3C:
     def __init__(self, gamma, updateStride, maxEps, maxSteps, hiddenSize, lr):
         self.params = {'MAX_EPISODE': maxEps, 'MAX_STEP': maxSteps, 'UPDATE_STRIDE': updateStride, 'gamma': gamma, 'hiddenSize': hiddenSize}
-        self.env = gym.make('Hopper-v2').unwrapped
+        self.env = gym.make('HalfCheetah-v2').unwrapped
         self.globalNet = ACNet(self.env.observation_space.shape[0], hiddenSize, self.env.action_space.shape[0]).to(device)
         self.globalNet.share_memory()
         self.opt = SharedAdam(self.globalNet.parameters(), lr=lr, betas=(0.95, 0.999))
