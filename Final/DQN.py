@@ -18,9 +18,9 @@ import cv2
 cv2.ocl.setUseOpenCL(False)
 
 Exp = namedtuple('Exp', ('state', 'action', 'reward', 'nextState', 'done'))
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-resize = T.Compose([T.ToPILImage(),
-                    T.ToTensor()])
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def resize(state):
+    return torch.tensor(np.ascontiguousarray(state.transpose((2, 0, 1))), dtype=torch.uint8)
 
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env, noop_max=30):
@@ -47,10 +47,51 @@ class NoopResetEnv(gym.Wrapper):
     def step(self, ac):
         return self.env.step(ac)
 
+class FireResetEnv(gym.Wrapper):
+    def __init__(self, env):
+        gym.Wrapper.__init__(self, env)
+        assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
+        assert len(env.unwrapped.get_action_meanings()) >= 3
+
+    def reset(self, **kwargs):
+        self.env.reset(**kwargs)
+        obs, _, done, _ = self.env.step(1)
+        if done:
+            self.env.reset(**kwargs)
+        obs, _, done, _ = self.env.step(2)
+        if done:
+            self.env.reset(**kwargs)
+        return obs
+
+    def step(self, ac):
+        return self.env.step(ac)
+
+class EpisodicLifeEnv(gym.Wrapper):
+    def __init__(self, env):
+        gym.Wrapper.__init__(self, env)
+        self.lives = 0
+        self.was_real_done  = True
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.was_real_done = done
+        lives = self.env.unwrapped.ale.lives()
+        if lives < self.lives and lives > 0:
+            done = True
+        self.lives = lives
+        return obs, reward, done, info
+
+    def reset(self, **kwargs):
+        if self.was_real_done:
+            obs = self.env.reset(**kwargs)
+        else:
+            obs, _, _, _ = self.env.step(0)
+        self.lives = self.env.unwrapped.ale.lives()
+        return obs
+
 class MaxAndSkipEnv(gym.Wrapper):
     def __init__(self, env, skip=4):
         gym.Wrapper.__init__(self, env)
-        # most recent raw observations (for max pooling across time steps)
         self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype=np.uint8)
         self._skip       = skip
 
@@ -64,14 +105,20 @@ class MaxAndSkipEnv(gym.Wrapper):
             total_reward += reward
             if done:
                 break
-        # Note that the observation on the done=True frame
-        # doesn't matter
+
         max_frame = self._obs_buffer.max(axis=0)
 
         return max_frame, total_reward, done, info
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
+
+class ClipRewardEnv(gym.RewardWrapper):
+    def __init__(self, env):
+        gym.RewardWrapper.__init__(self, env)
+
+    def reward(self, reward):
+        return np.sign(reward)
 
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env, width=84, height=84, grayscale=True, dict_space_key=None):
@@ -181,14 +228,27 @@ class LazyFrames(object):
     def frame(self, i):
         return self._force()[..., i]
 
-def getEnv(env_id):
+def getEnv(env_id, isNoopReset=True, isMaxAndSkip=True, isEpisodic=True, isFireReset=True, isWarpFrame=True, isScale=False, isClipReward=True, isFrameStack=True):
     env = gym.make(env_id)
     assert 'NoFrameskip' in env.spec.id
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
-    env = WarpFrame(env)
-    # env = ScaledFloatFrame(env)
-    env = FrameStack(env, 4)
+    if isNoopReset:
+        env = NoopResetEnv(env, noop_max=30)
+    if isMaxAndSkip:
+        env = MaxAndSkipEnv(env, skip=4)
+    if isEpisodic:
+        env = EpisodicLifeEnv(env)
+    if isFireReset:
+        if 'FIRE' in env.unwrapped.get_action_meanings():
+            env = FireResetEnv(env)
+    if isWarpFrame:
+        env = WarpFrame(env)
+    
+    if isScale:
+        env = ScaledFloatFrame(env)
+    if isClipReward:
+        env = ClipRewardEnv(env)
+    if isFrameStack:
+        env = FrameStack(env, 4)
     return env
 
 class Agent:
@@ -209,8 +269,6 @@ class Agent:
         self.learnStride = learnStride
         self.updateStride = updateStride
         self.maxStep = maxStep
-        # self.net = DQN(self.stateSize[0], self.stateSize[1], self.stateSize[2], self.hiddenSize, self.actionNum).to(device)
-        # self.targetNet = DQN(self.stateSize[0], self.stateSize[1], self.stateSize[2], self.hiddenSize, self.actionNum).to(device)
         if isDueling:
             self.net = DuelingDQN(84, 84, 4, self.hiddenSize, self.actionNum).to(device)
             self.targetNet = DuelingDQN(84, 84, 4, self.hiddenSize, self.actionNum).to(device)
@@ -223,12 +281,12 @@ class Agent:
         if ifEpsilonGreedy:
             if random.random() > self.epsilon:
                 with torch.no_grad():
-                    return self.net(state).max(1)[1].view(1, 1)
+                    return self.net(state.float()).max(1)[1].view(1, 1)
             else:
                 return torch.tensor([[random.randrange(self.actionNum)]], device=device, dtype=torch.long)
         else:
             with torch.no_grad():
-                return self.net(state).max(1)[1].view(1, 1)
+                return self.net(state.float()).max(1)[1].view(1, 1)
     
     def epsilonDecay(self, N):
         # if N >= 50000:
@@ -241,12 +299,12 @@ class Agent:
             return
         exps = buf.sample(self.batchSize)
         batch = Exp(*zip(*exps))  # batch => Exp of batch
-        stateBatch = torch.cat(batch.state).to(device) # batchSize * stateSpace.shape[0]
+        stateBatch = torch.cat(batch.state).float().to(device) # batchSize * stateSpace.shape[0]
         actionBatch = torch.cat(batch.action).to(device) # batchSize * 1
         rewardBatch = torch.cat(batch.reward).to(device) # batchSize * 1
-        nextStateBatch = torch.cat(batch.nextState).to(device) # batchSize * stateSpace.shape[0]
+        nextStateBatch = torch.cat(batch.nextState).float().to(device) # batchSize * stateSpace.shape[0]
         doneBatch = torch.cat(batch.done).to(device)  # batchSize * 1
-
+        
         if algo == 'DQN':
             Q = self.net(stateBatch).gather(1, actionBatch)  # get Q(s_t, a)
             targetQ = self.targetNet(nextStateBatch).max(1)[0].view(-1, 1) # max_a Q'(s_t+1, a)
@@ -277,11 +335,10 @@ class Agent:
         self.targetNet.load_state_dict(self.net.state_dict())
         for i in range(episodeNum):
             score = 0.0
-            # rewardDecay = 1.0
             startTime = time.time()
             state = np.array(env.reset())
             for t in count():
-                env.render()
+                # env.render()
                 action = self.getAction(resize(state).unsqueeze(0).to(device))
                 nextState, reward, done, _ = env.step(action.item())
                 nextState = np.array(nextState)
@@ -291,8 +348,7 @@ class Agent:
                           resize(nextState).unsqueeze(0).to("cpu"),
                           torch.tensor(np.array([not done]).reshape(1, -1), device="cpu", dtype=torch.long))
                 state = nextState
-                # score += rewardDecay * reward
-                # rewardDecay *= self.gamma
+
                 score += reward
                 totalN += 1
                 if totalN % self.learnStride == 0:
@@ -303,14 +359,21 @@ class Agent:
                     self.epsilonDecay(totalN)
                 if totalN % self.updateStride == 0:
                     self.targetNet.load_state_dict(self.net.state_dict())
-                # if done or t + 1 >= self.maxStep:
-                if done:
+                if done or t + 1 >= self.maxStep:
                     scores.append(score)
                     steps.append(t + 1)
                     endingTime = time.time()
-                    print("Episode %d ended after %d timesteps with score %f, epsilon=%f in %fs" % (i + 1, t + 1, score, self.epsilon, endingTime-startTime))
+                    print("Episode %d ended after %d timesteps with score %f, buf=%d, epsilon=%f in %fs" % (i + 1, t + 1, score, len(buf), self.epsilon, endingTime-startTime))
                     break
-        
+            if i % 1000 == 0:
+                np.save('score' + str(i), scores)
+                np.save('step' + str(i), steps)
+                np.save('loss' + str(i), losses)
+                np.save('Qmean' + str(i), Qmeans)
+                torch.save(self.net.state_dict(), 'net' + str(i) + '.pkl')
+                torch.save(self.targetNet.state_dict(), 'targetNet' + str(i) + '.pkl')
+
+        torch.save(buf.buffer, 'buf.pkl')
         np.save('score', scores)
         np.save('step', steps)
         np.save('loss',losses)
@@ -359,17 +422,17 @@ class ReplayBuffer:
 class DQN(nn.Module):
     def __init__(self, h, w, inputChannel, hiddenSize, outputSize):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(inputChannel, 16, 8, 4)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, 4, 2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, 3, 1)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(inputChannel, 32, 8, 4)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 4, 2)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 64, 3, 1)
+        self.bn3 = nn.BatchNorm2d(64)
         def conv2d_size_out(size, kernel_size, stride):
             return (size - (kernel_size - 1) - 1) // stride  + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, 8, 4), 4, 2), 3, 1)
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, 8, 4), 4, 2), 3, 1)
-        linear_input_size = convw * convh * 32
+        linear_input_size = convw * convh * 64
         self.fc4 = nn.Linear(linear_input_size, hiddenSize)
         self.head = nn.Linear(hiddenSize, outputSize)
 
@@ -384,17 +447,17 @@ class DQN(nn.Module):
 class DuelingDQN(nn.Module):
     def __init__(self, h, w, inputChannel, hiddenSize, outputSize):
         super(DuelingDQN, self).__init__()
-        self.conv1 = nn.Conv2d(inputChannel, 16, 8, 4)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, 4, 2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, 3, 1)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(inputChannel, 32, 8, 4)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, 4, 2)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 64, 3, 1)
+        self.bn3 = nn.BatchNorm2d(64)
         def conv2d_size_out(size, kernel_size, stride):
             return (size - (kernel_size - 1) - 1) // stride  + 1
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, 8, 4), 4, 2), 3, 1)
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, 8, 4), 4, 2), 3, 1)
-        linear_input_size = convw * convh * 32
+        linear_input_size = convw * convh * 64
         self.fc4_adv = nn.Linear(linear_input_size, hiddenSize)
         self.fc4_val = nn.Linear(linear_input_size, hiddenSize)
         self.head_adv = nn.Linear(hiddenSize, outputSize)
@@ -414,28 +477,10 @@ class DuelingDQN(nn.Module):
         val = self.head_val(val).expand(x.size(0), self.outputSize)
         x = val + adv - adv.mean(1).unsqueeze(1).expand(x.size(0), self.outputSize)
         return x
-
-# def testNet(env, method):
-#     net = DQN(2, 256, 3)
-#     net.load_state_dict(torch.load('net.pkl'))
-#     avg = 0.0
-#     for i in range(1000):
-#         state = env.reset()
-#         Q = 0.0
-#         for t in count():
-#             # env.render()
-#             action = net(torch.FloatTensor([[float(state[0]), float(state[1])]])).max(1)[1].view(-1)
-#             Q += net(torch.FloatTensor([[float(state[0]), float(state[1])]])).max(1)[0].view(-1).item()
-#             state, reward, done, _ = env.step(action.item())
-#             if done:
-#                 print("%d, %f" % (t + 1, Q / (t + 1)))
-#                 avg += Q / (t + 1)
-#                 break
-#     print(avg / 1000)
     
-def main():
-    env = getEnv("BreakoutNoFrameskip-v4")
-    buf = ReplayBuffer(capacity=100000)
+def runDQN(env_name):
+    env = getEnv(env_name)
+    buf = ReplayBuffer(capacity=1000000)
     buf.fill(env, initLen=1000, maxSteps=200)
     agt = Agent(env.action_space,
                 env.observation_space,
@@ -443,28 +488,11 @@ def main():
                 epsilon=[1.0, 0.1, 1000000],
                 tau=0.01,
                 batchSize=32,
-                lr=1e-4,
-                hiddenSize=256,
+                lr=2e-4,
+                hiddenSize=512,
                 learnStride=4,
-                updateStride=10000,
-                maxStep=1000,
+                updateStride=2000,
+                maxStep=10000,
                 isDueling=True)
-    agt.DeepQLearning(env, buf, episodeNum=20000, algo='DDQN', ifDecay=True)
-    # agt.DoubleDeepQLearning(env, buf, episodeNum=5000, ifDecay=True)
-    # draw(5000, 'DDQN', '', 50)
-    # testNet(env, 'DDQN')
+    agt.DeepQLearning(env, buf, episodeNum=50000, algo='DDQN', ifDecay=True)
     env.close()
-
-if __name__ == "__main__":
-    main()
-    # env = gym.make("PongNoFrameskip-v4")
-    # for i in range(10):
-    #     state = env.reset()
-    #     for t in count():
-    #         env.render()
-    #         action = env.action_space.sample()
-    #         state, reward, done, _ = env.step(action)
-    #         print(state)
-    #         if done:
-    #             print("%d Ended" % (t + 1))
-    #             break

@@ -205,8 +205,8 @@ class DDPG:
         torch.save(self.critic.state_dict(), 'netDDPG_C.pkl')
         self.env.close()
 
-def main():
-    env = gym.make('Hopper-v2')
+def runDDPG(env_name):
+    env = gym.make(env_name)
     buf = ReplayBuffer(1000000)
     buf.fill(env, 1000, 200)
     exps = buf.sample(1000)
@@ -222,9 +222,5 @@ def main():
                 maxEps=10000,
                 updateStride=30)
     ddpg.train()
-
-if __name__ == '__main__':
-    main()
-
 
 
