@@ -209,7 +209,6 @@ def runDDPG(env_name):
     env = gym.make(env_name)
     buf = ReplayBuffer(1000000)
     buf.fill(env, 1000, 200)
-    exps = buf.sample(1000)
     ddpg = DDPG(env=env,
                 buf=buf,
                 actorLR=1e-4,

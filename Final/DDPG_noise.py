@@ -274,27 +274,10 @@ class DDPG:
         torch.save(self.critic.state_dict(), 'netDDPG_CN.pkl')
         self.env.close()
 
-def test():
-    env = gym.make('HalfCheetah-v2')
-    # net = ACNet(env.observation_space.shape[0], 256, env.action_space.shape[0])
-    # net.load_state_dict(torch.load('net.pkl'))
-    for i in range(10000):
-        state = env.reset()
-        for t in count():
-            #env.render()
-            action = np.random.randn(1, env.action_space.shape[0])
-            nextState, reward, done, _ = env.step(action)
-            state = nextState
-            print(reward)
-            if done:
-                print("Episode %d ended in %d steps" % (i + 1, t + 1))
-                break
-
 def runDDPG(env_name):
     env = gym.make(env_name)
     buf = ReplayBuffer(1000000)
     buf.fill(env, 1000, 200)
-    exps = buf.sample(1000)
     ddpg = DDPG(env=env,
                 buf=buf,
                 actorLR=1e-4,
